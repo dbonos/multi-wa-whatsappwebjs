@@ -21,6 +21,13 @@ WhatsApp menggunakan 2 tipe identifier:
 
 📖 **[Read full @lid documentation →](LID-HANDLING.md)**
 
+## 📚 Documentation
+
+- **[🚀 CAPABILITIES.md](CAPABILITIES.md)** - Complete guide: Apa saja yang bisa dilakukan dengan whatsapp-web.js
+- **[📊 LID-HANDLING.md](LID-HANDLING.md)** - Advanced @lid handling & phone extraction
+- **[🔧 DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment workflow & service management
+- **[📋 SUMMARY.md](SUMMARY.md)** - Executive summary & comparison
+
 ## Installation
 
 ```bash
