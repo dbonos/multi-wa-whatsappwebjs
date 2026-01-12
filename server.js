@@ -573,8 +573,14 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
     
     if (contentType.includes('multipart/form-data')) {
         // Use multer for FormData (with or without attachment)
-        // upload.any() handles both files and fields
-        upload.any()(req, res, (err) => {
+        // Use fields() to explicitly define fields to parse (ensures fields are parsed even without files)
+        upload.fields([
+            { name: 'sessionId', maxCount: 1 },
+            { name: 'phone', maxCount: 1 },
+            { name: 'message', maxCount: 1 },
+            { name: 'caption', maxCount: 1 },
+            { name: 'attachment', maxCount: 1 }
+        ])(req, res, (err) => {
             if (err) {
                 console.error('❌ [MULTER ERROR]:', err);
                 return res.status(400).json({ error: 'File upload error: ' + err.message });
@@ -582,7 +588,8 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             console.log(`✅ [MULTER] Parsed FormData:`, {
                 bodyKeys: Object.keys(req.body || {}),
                 bodyValues: req.body,
-                filesCount: req.files?.length || 0
+                files: req.files,
+                filesCount: req.files ? Object.keys(req.files).length : 0
             });
             next();
         });
