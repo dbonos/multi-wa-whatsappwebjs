@@ -50,12 +50,20 @@ app.use(helmet({
     crossOriginResourcePolicy: false, // Disable CORP for HTTP
 }));
 app.use(cors());
-// Note: express.json() and express.urlencoded() should NOT parse multipart/form-data
-// Multer will handle that. But we need them for other routes.
-// The order matters - multer routes should be defined before these middleware
-// OR we can conditionally apply them
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// IMPORTANT: express.json() and express.urlencoded() should NOT parse multipart/form-data
+// But they might interfere. We'll use a conditional middleware that skips multipart requests
+app.use((req, res, next) => {
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+        // Skip json/urlencoded parsing for multipart requests - let multer handle it
+        return next();
+    }
+    // For other requests, use json/urlencoded parsing
+    express.json({ limit: '50mb' })(req, res, (err) => {
+        if (err) return next(err);
+        express.urlencoded({ extended: true, limit: '50mb' })(req, res, next);
+    });
+});
 
 // Rate limiting
 const limiter = rateLimit({
