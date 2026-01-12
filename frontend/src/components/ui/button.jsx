@@ -1,11 +1,15 @@
 import * as React from "react"
+import { motion } from "framer-motion"
 import { Slot } from "@radix-ui/react-slot"
 import { cn } from "../../lib/utils"
 
 const Button = React.forwardRef(({ className, variant = "default", size = "default", asChild = false, ...props }, ref) => {
-  const Comp = asChild ? Slot : "button"
+  const Comp = asChild ? Slot : motion.button
   return (
     <Comp
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.1 }}
       className={cn(
         "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
         {

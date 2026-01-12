@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { messagesAPI, sessionsAPI } from '../services/api';
 import socketService from '../services/socket';
 import { Button } from '../components/ui/button';
@@ -193,15 +194,68 @@ export default function Messages() {
     return date.toLocaleString();
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.3,
+      },
+    },
+  };
+
+  const messageVariants = {
+    hidden: { opacity: 0, x: -20 },
+    visible: {
+      opacity: 1,
+      x: 0,
+      transition: {
+        duration: 0.3,
+      },
+    },
+    exit: {
+      opacity: 0,
+      x: 20,
+      transition: {
+        duration: 0.2,
+      },
+    },
+  };
+
   return (
-    <div className="space-y-6">
-      <div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="space-y-6"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         <h1 className="text-3xl font-bold text-gray-900">Messages</h1>
         <p className="text-gray-600 mt-1">Send and manage WhatsApp messages</p>
-      </div>
+      </motion.div>
 
       {/* Session Selector */}
-      <div className="card">
+      <motion.div
+        variants={itemVariants}
+        initial="hidden"
+        animate="visible"
+        className="card"
+      >
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Session
         </label>
@@ -227,8 +281,16 @@ export default function Messages() {
       </div>
 
       {/* Send Message Form */}
-      {selectedSession && (
-        <div className="card bg-gradient-to-r from-whatsapp to-whatsapp-dark text-white">
+      <AnimatePresence>
+        {selectedSession && (
+          <motion.div
+            key="send-form"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+            className="card bg-gradient-to-r from-whatsapp to-whatsapp-dark text-white"
+          >
           <h2 className="text-xl font-semibold mb-4">Send Message</h2>
           <form onSubmit={handleSend} className="space-y-4">
             <div>
@@ -303,8 +365,9 @@ export default function Messages() {
               )}
             </button>
           </form>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Messages List */}
       {selectedSession && (
@@ -345,25 +408,46 @@ export default function Messages() {
           <CardContent>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center justify-center py-12"
+            >
               <Loader2 className="w-8 h-8 animate-spin text-whatsapp" />
-            </div>
+            </motion.div>
           ) : messages.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-12 text-gray-500"
+            >
               No messages found
-            </div>
+            </motion.div>
           ) : (
-            <div className="space-y-3">
-              {messages.map((msg) => {
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-3"
+            >
+              <AnimatePresence>
+                {messages.map((msg, index) => {
                 const StatusIcon = statusIcons[msg.status]?.icon || Clock;
                 const statusColor = statusIcons[msg.status]?.color || 'text-gray-400';
                 const isDeleted = msg.is_deleted || msg.is_retracted;
 
                 return (
-                  <Card
-                    key={msg.id}
-                    className={`${isDeleted ? 'opacity-60 bg-gray-100' : ''} transition-all`}
+                  <motion.div
+                    key={msg.message_id}
+                    variants={messageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    layout
                   >
+                    <Card
+                      className={`${isDeleted ? 'opacity-60 bg-gray-100' : ''} transition-all`}
+                    >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
@@ -429,14 +513,16 @@ export default function Messages() {
                       </div>
                     </CardContent>
                   </Card>
+                  </motion.div>
                 );
               })}
-            </div>
+              </AnimatePresence>
+            </motion.div>
           )}
           </CardContent>
         </Card>
       )}
-    </div>
+    </motion.div>
   );
 }
 

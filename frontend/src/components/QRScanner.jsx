@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { sessionsAPI } from '../services/api';
 import socketService from '../services/socket';
@@ -75,8 +76,22 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
   }, [sessionId, status, onReady]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Scan QR Code</h2>
           <button
@@ -87,16 +102,35 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
           </button>
         </div>
 
-        {status === 'loading' || status === 'waiting' ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="w-12 h-12 animate-spin text-whatsapp mb-4" />
-            <p className="text-gray-600">
-              {status === 'waiting' ? 'Waiting for QR code...' : 'Loading QR code...'}
-            </p>
-          </div>
-        ) : status === 'ready' ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />
+        <AnimatePresence mode="wait">
+          {status === 'loading' || status === 'waiting' ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-12"
+            >
+              <Loader2 className="w-12 h-12 animate-spin text-whatsapp mb-4" />
+              <p className="text-gray-600">
+                {status === 'waiting' ? 'Waiting for QR code...' : 'Loading QR code...'}
+              </p>
+            </motion.div>
+          ) : status === 'ready' ? (
+            <motion.div
+              key="ready"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="flex flex-col items-center justify-center py-12"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", delay: 0.2 }}
+              >
+                <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />
+              </motion.div>
             <p className="text-lg font-semibold text-gray-900 mb-2">
               Connected Successfully!
             </p>
@@ -109,10 +143,16 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
             >
               Close
             </button>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <XCircle className="w-12 h-12 text-red-500 mb-4" />
+            </motion.div>
+          ) : error ? (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-12"
+            >
+              <XCircle className="w-12 h-12 text-red-500 mb-4" />
             <p className="text-red-600 mb-4">{error}</p>
             <button
               onClick={() => {
@@ -124,20 +164,37 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
               <RefreshCw className="w-4 h-4" />
               Retry
             </button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="bg-gray-50 rounded-xl p-6 flex items-center justify-center">
-              {qrCode && (
-                <QRCodeSVG
-                  value={qrCode}
-                  size={256}
-                  level="H"
-                  includeMargin={true}
-                  className="w-full max-w-xs"
-                />
-              )}
-            </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="qr"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2 }}
+                className="bg-gray-50 rounded-xl p-6 flex items-center justify-center"
+              >
+                {qrCode && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <QRCodeSVG
+                      value={qrCode}
+                      size={256}
+                      level="H"
+                      includeMargin={true}
+                      className="w-full max-w-xs"
+                    />
+                  </motion.div>
+                )}
+              </motion.div>
 
             <div className="space-y-3">
               <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -161,10 +218,12 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
                 QR code refreshes automatically every 20 seconds
               </p>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 

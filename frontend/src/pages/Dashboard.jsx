@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { sessionsAPI } from '../services/api';
 import socketService from '../services/socket';
 import SessionCard from '../components/SessionCard';
@@ -70,10 +71,41 @@ export default function Dashboard() {
     (session.phone_number && session.phone_number.includes(searchQuery))
   );
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.3,
+      },
+    },
+  };
+
   return (
-    <div className="space-y-6">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="space-y-6"
+    >
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+      >
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-1">
@@ -87,10 +119,15 @@ export default function Dashboard() {
           <RefreshCw className="w-4 h-4" />
           Refresh
         </button>
-      </div>
+      </motion.div>
 
       {/* Create New Session */}
-      <div className="card bg-gradient-to-r from-whatsapp to-whatsapp-dark text-white">
+      <motion.div
+        variants={itemVariants}
+        initial="hidden"
+        animate="visible"
+        className="card bg-gradient-to-r from-whatsapp to-whatsapp-dark text-white"
+      >
         <h2 className="text-xl font-semibold mb-4">Add New WhatsApp Session</h2>
         <form onSubmit={handleCreateSession} className="flex gap-2">
           <input
@@ -120,11 +157,17 @@ export default function Dashboard() {
             )}
           </button>
         </form>
-      </div>
+      </motion.div>
 
       {/* Search */}
-      {sessions.length > 0 && (
-        <div className="relative">
+      <AnimatePresence>
+        {sessions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="relative"
+          >
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
@@ -133,16 +176,25 @@ export default function Dashboard() {
             placeholder="Search sessions..."
             className="input pl-10"
           />
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Sessions Grid */}
       {loading ? (
-        <div className="flex items-center justify-center py-12">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-center justify-center py-12"
+        >
           <Loader2 className="w-8 h-8 animate-spin text-whatsapp" />
-        </div>
+        </motion.div>
       ) : filteredSessions.length === 0 ? (
-        <div className="card text-center py-12">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="card text-center py-12"
+        >
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Plus className="w-8 h-8 text-gray-400" />
           </div>
@@ -154,24 +206,68 @@ export default function Dashboard() {
               ? 'Try a different search term'
               : 'Create your first WhatsApp session to get started'}
           </p>
-        </div>
+        </motion.div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSessions.map((session) => (
-            <SessionCard
-              key={session.session_id}
-              session={session}
-              onDelete={handleDelete}
-              onRefresh={loadSessions}
-            />
-          ))}
-        </div>
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
+          <AnimatePresence>
+            {filteredSessions.map((session) => (
+              <motion.div
+                key={session.session_id}
+                variants={itemVariants}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.2 }}
+              >
+                <SessionCard
+                  session={session}
+                  onDelete={handleDelete}
+                  onRefresh={loadSessions}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
       )}
 
       {/* Stats */}
-      {sessions.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="card">
+      <AnimatePresence>
+        {sessions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="grid grid-cols-1 md:grid-cols-4 gap-4"
+          >
+            {[
+              { label: 'Total Sessions', value: sessions.length, color: 'text-gray-900' },
+              { label: 'Active', value: sessions.filter((s) => s.realtime_status === 'ready').length, color: 'text-green-600' },
+              { label: 'Total Messages', value: sessions.reduce((sum, s) => sum + (s.message_count || 0), 0), color: 'text-gray-900' },
+              { label: 'Total Contacts', value: sessions.reduce((sum, s) => sum + (s.contact_count || 0), 0), color: 'text-gray-900' },
+            ].map((stat, index) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 + index * 0.1 }}
+                className="card"
+              >
+                <p className="text-sm text-gray-600">{stat.label}</p>
+                <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
             <p className="text-sm text-gray-600">Total Sessions</p>
             <p className="text-2xl font-bold text-gray-900">{sessions.length}</p>
           </div>

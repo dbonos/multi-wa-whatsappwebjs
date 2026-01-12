@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { sessionsAPI } from '../services/api';
 import QRScanner from './QRScanner';
 import {
@@ -56,7 +57,12 @@ export default function SessionCard({ session, onDelete, onRefresh }) {
 
   return (
     <>
-      <div className="card hover:shadow-lg transition-shadow">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ y: -4, transition: { duration: 0.2 } }}
+        className="card hover:shadow-lg transition-shadow"
+      >
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className={`w-12 h-12 rounded-full ${
@@ -132,7 +138,7 @@ export default function SessionCard({ session, onDelete, onRefresh }) {
             )}
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {showQR && (
         <QRScanner
