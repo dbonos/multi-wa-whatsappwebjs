@@ -404,7 +404,7 @@ app.post('/api/messages/send', authenticate, upload.single('attachment'), async 
 // Get sent messages list
 app.get('/api/messages', authenticate, async (req, res) => {
     try {
-        const { sessionId, limit = 50, offset = 0 } = req.query;
+        const { sessionId, limit = 50, offset = 0, includeDeleted = false } = req.query;
         const limitNum = parseInt(limit) || 50;
         const offsetNum = parseInt(offset) || 0;
 
@@ -421,25 +421,50 @@ app.get('/api/messages', authenticate, async (req, res) => {
             params.push(sessionId);
         }
 
+        if (includeDeleted !== 'true') {
+            query += ' AND (m.is_deleted = FALSE OR m.is_deleted IS NULL) AND (m.is_retracted = FALSE OR m.is_retracted IS NULL)';
+        }
+
         query += ` ORDER BY m.timestamp DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
         const [messages] = await pool.execute(query, params);
 
-        // Get status history for each message
-        const messagesWithStatus = await Promise.all(
+        // Get status history, reactions, and replies for each message
+        const messagesWithDetails = await Promise.all(
             messages.map(async (msg) => {
                 const [history] = await pool.execute(
                     'SELECT status, changed_at FROM message_status_history WHERE message_id = ? ORDER BY changed_at DESC',
                     [msg.message_id]
                 );
+
+                // Get reactions
+                const [reactions] = await pool.execute(
+                    `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+                    FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+                    [msg.message_id]
+                );
+
+                // Get reply info if exists
+                let replyToMessage = null;
+                if (msg.reply_to_message_id) {
+                    const [replies] = await pool.execute(
+                        `SELECT message_id, body, caption, message_type, from_number, timestamp
+                        FROM messages WHERE message_id = ?`,
+                        [msg.reply_to_message_id]
+                    );
+                    replyToMessage = replies[0] || null;
+                }
+
                 return {
                     ...msg,
-                    statusHistory: history
+                    statusHistory: history,
+                    reactions: reactions,
+                    replyToMessage: replyToMessage
                 };
             })
         );
 
-        res.json({ success: true, messages: messagesWithStatus });
+        res.json({ success: true, messages: messagesWithDetails });
     } catch (error) {
         console.error('Error getting messages:', error);
         res.status(500).json({ error: error.message });
@@ -465,11 +490,95 @@ app.get('/api/messages/:messageId/status', authenticate, async (req, res) => {
             [messageId]
         );
 
+        // Get reactions
+        const [reactions] = await pool.execute(
+            `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+            FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+            [messageId]
+        );
+
         res.json({
             success: true,
             message: messages[0],
-            statusHistory: history
+            statusHistory: history,
+            reactions: reactions
         });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get message reactions
+app.get('/api/messages/:messageId/reactions', authenticate, async (req, res) => {
+    try {
+        const { messageId } = req.params;
+
+        const [reactions] = await pool.execute(
+            `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+            FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+            [messageId]
+        );
+
+        res.json({ success: true, reactions });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get message replies
+app.get('/api/messages/:messageId/replies', authenticate, async (req, res) => {
+    try {
+        const { messageId } = req.params;
+
+        const [replies] = await pool.execute(
+            `SELECT m.*, a.file_name, a.file_path, a.file_type
+            FROM message_replies mr
+            JOIN messages m ON m.message_id = mr.message_id
+            LEFT JOIN attachments a ON a.message_id = m.message_id
+            WHERE mr.reply_to_message_id = ?
+            ORDER BY m.timestamp DESC`,
+            [messageId]
+        );
+
+        res.json({ success: true, replies });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get deleted/retracted messages
+app.get('/api/messages/deleted', authenticate, async (req, res) => {
+    try {
+        const { sessionId, limit = 50, offset = 0, type } = req.query;
+        const limitNum = parseInt(limit) || 50;
+        const offsetNum = parseInt(offset) || 0;
+
+        let query = `
+            SELECT m.*, a.file_name, a.file_path, a.file_type,
+            dml.deletion_type, dml.deleted_at, dml.body_preview
+            FROM messages m
+            LEFT JOIN attachments a ON a.message_id = m.message_id
+            LEFT JOIN deleted_messages_log dml ON dml.message_id = m.message_id
+            WHERE (m.is_deleted = TRUE OR m.is_retracted = TRUE)
+        `;
+        const params = [];
+
+        if (sessionId) {
+            query += ' AND m.session_id = ?';
+            params.push(sessionId);
+        }
+
+        if (type === 'deleted') {
+            query += ' AND m.is_deleted = TRUE';
+        } else if (type === 'retracted') {
+            query += ' AND m.is_retracted = TRUE';
+        }
+
+        query += ` ORDER BY m.deleted_at DESC, m.retracted_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
+
+        const [messages] = await pool.execute(query, params);
+
+        res.json({ success: true, messages });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -990,6 +1099,52 @@ function createClient(sessionId) {
             socketHandler.emitMessageStatus(msg.id._serialized, status, sessionId);
         } catch (error) {
             console.error('Error updating message status:', error);
+        }
+    });
+
+    // Message reaction event
+    client.on('message_reaction', async (reaction) => {
+        try {
+            await messageHandler.saveReaction(sessionId, reaction);
+            
+            // Emit via WebSocket
+            socketHandler.emitReaction(sessionId, {
+                messageId: reaction.msgId._serialized,
+                reaction: reaction.reaction,
+                from: reaction.senderId
+            });
+        } catch (error) {
+            console.error('Error handling message reaction:', error);
+        }
+    });
+
+    // Message revoked (deleted for everyone)
+    client.on('message_revoke_everyone', async (after, before) => {
+        try {
+            await messageHandler.handleMessageRevoked(sessionId, after, before, 'retracted');
+            
+            // Emit via WebSocket
+            socketHandler.emitMessageRevoked(sessionId, {
+                messageId: after.id._serialized,
+                type: 'retracted'
+            });
+        } catch (error) {
+            console.error('Error handling message revoke:', error);
+        }
+    });
+
+    // Message revoked (deleted for me)
+    client.on('message_revoke_me', async (msg) => {
+        try {
+            await messageHandler.handleMessageRevoked(sessionId, msg, null, 'deleted');
+            
+            // Emit via WebSocket
+            socketHandler.emitMessageRevoked(sessionId, {
+                messageId: msg.id._serialized,
+                type: 'deleted'
+            });
+        } catch (error) {
+            console.error('Error handling message revoke:', error);
         }
     });
 

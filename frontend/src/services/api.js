@@ -80,6 +80,12 @@ export const messagesAPI = {
   
   sendTyping: (sessionId, phone) =>
     api.post('/messages/typing', { sessionId, phone }),
+  
+  getReactions: (messageId) => api.get(`/messages/${messageId}/reactions`),
+  
+  getReplies: (messageId) => api.get(`/messages/${messageId}/replies`),
+  
+  getDeleted: (params = {}) => api.get('/messages/deleted', { params }),
 };
 
 // Status & Stories API

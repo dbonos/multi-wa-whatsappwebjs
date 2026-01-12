@@ -105,11 +105,24 @@ class MessageHandler {
             const fromNumber = contactInfo?.phoneNumber || contact.number || null;
             const contactId = contact.id._serialized;
 
+            // Check if message is a reply
+            let replyToMessageId = null;
+            if (message.hasQuotedMsg) {
+                try {
+                    const quotedMsg = await message.getQuotedMessage();
+                    if (quotedMsg) {
+                        replyToMessageId = quotedMsg.id._serialized;
+                    }
+                } catch (err) {
+                    console.log('Error getting quoted message:', err.message);
+                }
+            }
+
             // Save message
             const [result] = await pool.execute(
                 `INSERT INTO messages 
-                (session_id, message_id, from_number, to_number, contact_id, direction, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, attachment_path)
-                VALUES (?, ?, ?, ?, ?, 'incoming', ?, ?, ?, 'delivered', ?, ?, ?, ?)`,
+                (session_id, message_id, from_number, to_number, contact_id, direction, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path)
+                VALUES (?, ?, ?, ?, ?, 'incoming', ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?)`,
                 [
                     sessionId,
                     message.id._serialized,
@@ -122,9 +135,16 @@ class MessageHandler {
                     message.timestamp,
                     message.isForwarded || false,
                     message.hasQuotedMsg || false,
+                    replyToMessageId,
+                    replyToMessageId,
                     attachmentPath
                 ]
             );
+
+            // Save reply relationship if exists
+            if (replyToMessageId) {
+                await this.saveReply(sessionId, message.id._serialized, replyToMessageId);
+            }
 
             // Save status history
             await pool.execute(
@@ -263,6 +283,173 @@ class MessageHandler {
             );
         } catch (error) {
             console.error('Error updating message status:', error);
+        }
+    }
+
+    // Save message reaction
+    async saveReaction(sessionId, reaction) {
+        try {
+            const messageId = reaction.msgId._serialized;
+            const fromNumber = reaction.senderId?.user || null;
+            const fromContactId = reaction.senderId?._serialized || null;
+            const reactionEmoji = reaction.reaction?.emoji || '';
+            const reactionText = reaction.reaction?.text || '';
+
+            // Check if reaction already exists (for update)
+            const [existing] = await pool.execute(
+                `SELECT id FROM message_reactions 
+                WHERE message_id = ? AND from_number = ? AND reaction_emoji = ?`,
+                [messageId, fromNumber, reactionEmoji]
+            );
+
+            if (existing.length > 0) {
+                // Update existing reaction
+                await pool.execute(
+                    `UPDATE message_reactions 
+                    SET reaction_text = ?, timestamp = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE message_id = ? AND from_number = ? AND reaction_emoji = ?`,
+                    [reactionText, Math.floor(Date.now() / 1000), messageId, fromNumber, reactionEmoji]
+                );
+            } else {
+                // Insert new reaction
+                await pool.execute(
+                    `INSERT INTO message_reactions 
+                    (message_id, session_id, from_number, from_contact_id, reaction_emoji, reaction_text, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        messageId,
+                        sessionId,
+                        fromNumber,
+                        fromContactId,
+                        reactionEmoji,
+                        reactionText,
+                        Math.floor(Date.now() / 1000)
+                    ]
+                );
+            }
+
+            // Forward to webhook
+            await this.forwardToWebhook(sessionId, {
+                event: 'message_reaction',
+                reaction: {
+                    messageId,
+                    from: fromNumber,
+                    emoji: reactionEmoji,
+                    text: reactionText,
+                    timestamp: Math.floor(Date.now() / 1000)
+                }
+            });
+
+            return true;
+        } catch (error) {
+            console.error('Error saving reaction:', error);
+            return false;
+        }
+    }
+
+    // Handle message revoked (deleted/retracted)
+    async handleMessageRevoked(sessionId, after, before, type) {
+        try {
+            const messageId = after.id._serialized;
+            const timestamp = Math.floor(Date.now() / 1000);
+
+            // Get message info before deletion
+            let messageInfo = null;
+            if (before) {
+                const [messages] = await pool.execute(
+                    `SELECT from_number, to_number, message_type, body, caption 
+                    FROM messages WHERE message_id = ?`,
+                    [before.id._serialized]
+                );
+                messageInfo = messages[0] || null;
+            } else {
+                // Try to get from after message
+                const [messages] = await pool.execute(
+                    `SELECT from_number, to_number, message_type, body, caption 
+                    FROM messages WHERE message_id = ?`,
+                    [messageId]
+                );
+                messageInfo = messages[0] || null;
+            }
+
+            // Update message status
+            if (type === 'retracted') {
+                await pool.execute(
+                    `UPDATE messages 
+                    SET is_retracted = TRUE, retracted_at = FROM_UNIXTIME(?), updated_at = CURRENT_TIMESTAMP
+                    WHERE message_id = ?`,
+                    [timestamp, messageId]
+                );
+            } else {
+                await pool.execute(
+                    `UPDATE messages 
+                    SET is_deleted = TRUE, deleted_at = FROM_UNIXTIME(?), updated_at = CURRENT_TIMESTAMP
+                    WHERE message_id = ?`,
+                    [timestamp, messageId]
+                );
+            }
+
+            // Save to deleted messages log
+            await pool.execute(
+                `INSERT INTO deleted_messages_log 
+                (message_id, session_id, from_number, to_number, message_type, body_preview, deletion_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    messageId,
+                    sessionId,
+                    messageInfo?.from_number || null,
+                    messageInfo?.to_number || null,
+                    messageInfo?.message_type || 'text',
+                    (messageInfo?.body || messageInfo?.caption || '').substring(0, 255),
+                    type
+                ]
+            );
+
+            // Forward to webhook
+            await this.forwardToWebhook(sessionId, {
+                event: 'message_revoked',
+                message: {
+                    messageId,
+                    type,
+                    deletedAt: timestamp,
+                    preview: messageInfo ? {
+                        from: messageInfo.from_number,
+                        to: messageInfo.to_number,
+                        type: messageInfo.message_type,
+                        body: messageInfo.body || messageInfo.caption
+                    } : null
+                }
+            });
+
+            return true;
+        } catch (error) {
+            console.error('Error handling message revoked:', error);
+            return false;
+        }
+    }
+
+    // Save reply relationship
+    async saveReply(sessionId, messageId, replyToMessageId) {
+        try {
+            // Update message with reply_to_message_id
+            await pool.execute(
+                `UPDATE messages SET reply_to_message_id = ?, has_quoted_msg = TRUE 
+                WHERE message_id = ?`,
+                [replyToMessageId, messageId]
+            );
+
+            // Save to message_replies table
+            await pool.execute(
+                `INSERT INTO message_replies (message_id, reply_to_message_id, session_id)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE reply_to_message_id = VALUES(reply_to_message_id)`,
+                [messageId, replyToMessageId, sessionId]
+            );
+
+            return true;
+        } catch (error) {
+            console.error('Error saving reply:', error);
+            return false;
         }
     }
 }

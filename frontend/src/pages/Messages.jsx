@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { messagesAPI, sessionsAPI } from '../services/api';
 import socketService from '../services/socket';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 import {
   Send,
   Paperclip,
@@ -11,6 +14,9 @@ import {
   Play,
   XCircle,
   Filter,
+  Heart,
+  Reply,
+  Trash2,
 } from 'lucide-react';
 
 const statusIcons = {
@@ -32,6 +38,8 @@ export default function Messages() {
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [deletedMessages, setDeletedMessages] = useState([]);
 
   useEffect(() => {
     loadSessions();
@@ -48,10 +56,61 @@ export default function Messages() {
       );
     };
 
+    // Listen for reactions
+    const handleReaction = (data) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.message_id === data.messageId) {
+            const reactions = m.reactions || [];
+            const existingIndex = reactions.findIndex(
+              (r) => r.from_number === data.from && r.reaction_emoji === data.reaction.emoji
+            );
+            if (existingIndex >= 0) {
+              reactions[existingIndex] = {
+                ...reactions[existingIndex],
+                ...data.reaction,
+              };
+            } else {
+              reactions.push({
+                reaction_emoji: data.reaction.emoji,
+                reaction_text: data.reaction.text,
+                from_number: data.from,
+                timestamp: Date.now() / 1000,
+              });
+            }
+            return { ...m, reactions };
+          }
+          return m;
+        })
+      );
+    };
+
+    // Listen for revoked messages
+    const handleRevoked = (data) => {
+      if (data.type === 'retracted' || data.type === 'deleted') {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.message_id === data.messageId
+              ? {
+                  ...m,
+                  is_retracted: data.type === 'retracted',
+                  is_deleted: data.type === 'deleted',
+                }
+              : m
+          )
+        );
+        loadDeletedMessages();
+      }
+    };
+
     socketService.on('message_status', handleStatus);
+    socketService.on('message_reaction', handleReaction);
+    socketService.on('message_revoked', handleRevoked);
 
     return () => {
       socketService.off('message_status', handleStatus);
+      socketService.off('message_reaction', handleReaction);
+      socketService.off('message_revoked', handleRevoked);
     };
   }, []);
 
@@ -79,7 +138,7 @@ export default function Messages() {
   const loadMessages = async () => {
     try {
       setLoading(true);
-      const params = { sessionId: selectedSession, limit: 50 };
+      const params = { sessionId: selectedSession, limit: 50, includeDeleted: showDeleted };
       const response = await messagesAPI.list(params);
       let msgs = response.data.messages || [];
 
@@ -92,6 +151,16 @@ export default function Messages() {
       console.error('Failed to load messages:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDeletedMessages = async () => {
+    try {
+      const params = { sessionId: selectedSession, limit: 50 };
+      const response = await messagesAPI.getDeleted(params);
+      setDeletedMessages(response.data.messages || []);
+    } catch (error) {
+      console.error('Failed to load deleted messages:', error);
     }
   };
 
@@ -239,25 +308,41 @@ export default function Messages() {
 
       {/* Messages List */}
       {selectedSession && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Sent Messages</h2>
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="input py-1 text-sm"
-              >
-                <option value="all">All Status</option>
-                <option value="sent">Sent</option>
-                <option value="delivered">Delivered</option>
-                <option value="read">Read</option>
-                <option value="played">Played</option>
-                <option value="failed">Failed</option>
-              </select>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Sent Messages</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={showDeleted ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setShowDeleted(!showDeleted);
+                    loadDeletedMessages();
+                  }}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  {showDeleted ? 'Hide' : 'Show'} Deleted
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-gray-500" />
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="input py-1 text-sm"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="sent">Sent</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="read">Read</option>
+                    <option value="played">Played</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </div>
+              </div>
             </div>
-          </div>
+          </CardHeader>
+          <CardContent>
 
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -272,40 +357,84 @@ export default function Messages() {
               {messages.map((msg) => {
                 const StatusIcon = statusIcons[msg.status]?.icon || Clock;
                 const statusColor = statusIcons[msg.status]?.color || 'text-gray-400';
+                const isDeleted = msg.is_deleted || msg.is_retracted;
 
                 return (
-                  <div
+                  <Card
                     key={msg.id}
-                    className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                    className={`${isDeleted ? 'opacity-60 bg-gray-100' : ''} transition-all`}
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-gray-900">
-                            To: {msg.to_number || 'Unknown'}
-                          </span>
-                          <StatusIcon className={`w-4 h-4 ${statusColor}`} />
-                          <span className={`badge badge-${msg.status === 'read' ? 'success' : msg.status === 'failed' ? 'danger' : 'info'}`}>
-                            {msg.status}
-                          </span>
-                        </div>
-                        <p className="text-gray-700">{msg.body || msg.caption || '(No text)'}</p>
-                        {msg.file_name && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            📎 {msg.file_name} ({msg.file_type})
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="font-medium text-gray-900">
+                              To: {msg.to_number || 'Unknown'}
+                            </span>
+                            <StatusIcon className={`w-4 h-4 ${statusColor}`} />
+                            <Badge variant={msg.status === 'read' ? 'success' : msg.status === 'failed' ? 'destructive' : 'info'}>
+                              {msg.status}
+                            </Badge>
+                            {isDeleted && (
+                              <Badge variant="destructive" className="flex items-center gap-1">
+                                <Trash2 className="w-3 h-3" />
+                                {msg.is_retracted ? 'Retracted' : 'Deleted'}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Reply indicator */}
+                          {msg.replyToMessage && (
+                            <div className="mb-2 p-2 bg-gray-100 rounded border-l-4 border-whatsapp">
+                              <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
+                                <Reply className="w-3 h-3" />
+                                Replying to:
+                              </div>
+                              <p className="text-sm text-gray-700 truncate">
+                                {msg.replyToMessage.body || msg.replyToMessage.caption || '(Media)'}
+                              </p>
+                            </div>
+                          )}
+
+                          <p className={`text-gray-700 ${isDeleted ? 'line-through' : ''}`}>
+                            {msg.body || msg.caption || '(No text)'}
                           </p>
-                        )}
+                          {msg.file_name && (
+                            <p className="text-sm text-gray-500 mt-1">
+                              📎 {msg.file_name} ({msg.file_type})
+                            </p>
+                          )}
+
+                          {/* Reactions */}
+                          {msg.reactions && msg.reactions.length > 0 && (
+                            <div className="mt-2 flex items-center gap-2 flex-wrap">
+                              {msg.reactions.map((reaction, idx) => (
+                                <Badge
+                                  key={idx}
+                                  variant="secondary"
+                                  className="flex items-center gap-1"
+                                >
+                                  <span>{reaction.reaction_emoji}</span>
+                                  <span className="text-xs">
+                                    {reaction.from_number?.slice(-4) || '?'}
+                                  </span>
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                          {formatDate(msg.timestamp)}
+                        </span>
                       </div>
-                      <span className="text-xs text-gray-500">
-                        {formatDate(msg.timestamp)}
-                      </span>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
           )}
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

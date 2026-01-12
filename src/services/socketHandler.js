@@ -88,6 +88,30 @@ class SocketHandler {
         });
     }
 
+    // Emit message reaction
+    emitReaction(sessionId, reaction) {
+        this.io.to(`session_${sessionId}`).emit('message_reaction', {
+            sessionId,
+            messageId: reaction.messageId,
+            from: reaction.from,
+            reaction: {
+                emoji: reaction.reaction?.emoji || reaction.reaction,
+                text: reaction.reaction?.text || '',
+            },
+            timestamp: Date.now()
+        });
+    }
+
+    // Emit message revoked (deleted/retracted)
+    emitMessageRevoked(sessionId, data) {
+        this.io.to(`session_${sessionId}`).emit('message_revoked', {
+            sessionId,
+            messageId: data.messageId,
+            type: data.type,
+            timestamp: Date.now()
+        });
+    }
+
     // Broadcast to all clients
     broadcast(event, data) {
         this.io.emit(event, data);
