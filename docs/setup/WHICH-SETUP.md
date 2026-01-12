@@ -42,7 +42,7 @@
    - Pull di server
    - Rebuild & restart service
 
-**Lihat workflow lengkap di [SETUP-SERVER.md](SETUP-SERVER.md#update-dari-local-ke-server)**
+**Lihat workflow lengkap di [SETUP-SERVER.md](SETUP-SERVER.md)**
 
 ---
 
