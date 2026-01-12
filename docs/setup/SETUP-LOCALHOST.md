@@ -65,7 +65,7 @@ VITE_SOCKET_URL=http://localhost:3000
 ### **5. Setup Admin User**
 
 ```bash
-node setup-admin.js
+node scripts/setup-admin.js
 ```
 
 ### **6. Start Development**

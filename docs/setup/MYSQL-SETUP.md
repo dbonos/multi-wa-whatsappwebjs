@@ -102,7 +102,7 @@ sudo netstat -tulpn | grep 5508
 ### **Create Admin User**
 
 ```bash
-node setup-admin.js
+node scripts/setup-admin.js
 ```
 
 **Atau manual:**
@@ -138,7 +138,7 @@ ON DUPLICATE KEY UPDATE username=username;
 **Jika develop di localhost tapi pakai database server:**
 
 ```bash
-./start-tunnel.sh
+./scripts/start-tunnel.sh
 ```
 
 **Script akan forward port 5508 dari server ke localhost:5508**

@@ -411,10 +411,10 @@ http://your-domain.com
 ### **Using deploy.sh Script**
 ```bash
 # Make executable
-chmod +x deploy.sh
+chmod +x scripts/deploy.sh
 
 # Run deployment
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 **Script akan:**

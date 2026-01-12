@@ -108,7 +108,7 @@ echo ""
 
 # Create admin user script
 echo "👤 Creating admin user setup script..."
-cat > setup-admin.js << 'EOF'
+cat > scripts/setup-admin.js << 'EOF'
 const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
 require('dotenv').config();
@@ -150,13 +150,13 @@ async function setupAdmin() {
 
 setupAdmin();
 EOF
-chmod +x setup-admin.js
+chmod +x scripts/setup-admin.js
 echo -e "${GREEN}✅ Admin setup script created${NC}"
 echo ""
 
 # Run admin setup
 echo "👤 Setting up admin user..."
-node setup-admin.js
+node scripts/setup-admin.js
 echo ""
 
 # Summary

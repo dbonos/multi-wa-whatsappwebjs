@@ -202,7 +202,7 @@ chmod +x start-tunnel.sh
 
 **Usage:**
 ```bash
-./start-tunnel.sh
+./scripts/start-tunnel.sh
 ```
 
 ---
@@ -231,7 +231,7 @@ chmod +x start-tunnel.sh
 
 ```bash
 # 1. Start SSH tunnel (Terminal 1)
-./start-tunnel.sh
+./scripts/start-tunnel.sh
 
 # 2. Start backend (Terminal 2)
 npm run dev
@@ -246,7 +246,7 @@ cd frontend && npm run dev
 git add . && git commit -m "changes" && git push origin main
 
 # 6. Deploy ke server
-ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~/multi-wa-whatsappwebjs && ./deploy.sh"
+ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~/multi-wa-whatsappwebjs && ./scripts/deploy.sh"
 ```
 
 ---

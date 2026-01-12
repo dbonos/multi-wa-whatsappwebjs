@@ -39,7 +39,7 @@ VITE_SOCKET_URL=http://localhost:3000
 # Pakai database di server via SSH tunnel
 
 # 1. Start SSH tunnel (Terminal baru, biarkan running)
-./start-tunnel.sh
+./scripts/start-tunnel.sh
 
 # 2. Edit .env untuk connect ke database server
 nano .env
@@ -134,7 +134,7 @@ sudo systemctl enable wa-web.service
 
 **First deployment:**
 ```bash
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 ---
@@ -193,7 +193,7 @@ ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171
 cd ~/multi-wa-whatsappwebjs
 
 # Run deployment script
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 **Script akan otomatis:**
@@ -331,7 +331,7 @@ git add . && git commit -m "message" && git push origin main
 
 ```bash
 # Deploy
-./deploy.sh
+./scripts/deploy.sh
 
 # Check service
 sudo systemctl status wa-web.service
@@ -415,7 +415,7 @@ cd frontend && npm run dev  # Frontend
 git add . && git commit -m "changes" && git push origin main
 
 # 3. Deploy ke server
-ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~/multi-wa-whatsappwebjs && ./deploy.sh"
+ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~/multi-wa-whatsappwebjs && ./scripts/deploy.sh"
 
 # 4. Test di server
 # Buka: http://108.137.37.171:3000
@@ -428,7 +428,7 @@ ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~
 - **[SETUP-LOCALHOST.md](SETUP-LOCALHOST.md)** - Setup untuk localhost
 - **[SETUP-SERVER.md](SETUP-SERVER.md)** - Setup untuk server
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment guide (same folder)
-- **[deploy.sh](deploy.sh)** - Deployment script
+- **[deploy.sh](../scripts/deploy.sh)** - Deployment script
 
 ---
 

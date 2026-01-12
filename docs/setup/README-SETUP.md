@@ -56,7 +56,7 @@ VITE_SOCKET_URL=http://YOUR_SERVER_IP:3000
 ### **4. Setup Admin User**
 
 ```bash
-node setup-admin.js
+node scripts/setup-admin.js
 ```
 
 **Output yang diharapkan:**
@@ -145,7 +145,7 @@ Sebelum mulai menggunakan, pastikan:
 - [ ] Migrations sudah di-import (`database/migrations/add_reactions_replies_deleted.sql`)
 - [ ] `.env` file sudah di-edit dengan password database
 - [ ] `frontend/.env` sudah di-edit dengan IP server (jika berbeda)
-- [ ] Admin user sudah dibuat (`node setup-admin.js`)
+- [ ] Admin user sudah dibuat (`node scripts/setup-admin.js`)
 - [ ] Server sudah running (`npm start` atau systemd service)
 - [ ] Bisa akses `http://localhost:3000` atau IP server
 - [ ] Login berhasil dengan admin/admin123
@@ -186,7 +186,7 @@ curl http://localhost:3000/api/sessions
 ### **Admin User Tidak Bisa Login**
 ```bash
 # Re-run setup admin
-node setup-admin.js
+node scripts/setup-admin.js
 
 # Check database
 mysql -u root -p wa_manager -e "SELECT * FROM users;"

@@ -91,12 +91,12 @@ ssh -i "/Users/danielbudiono/cursor_projects/multi wa whatwappwebjs/LightsailDef
 cd wa-web
 
 # Run deployment script
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 ### Or one-liner from local:
 ```bash
-ssh -i "/Users/danielbudiono/cursor_projects/multi wa whatwappwebjs/LightsailDefaultKey-ap-southeast-3.pem" ubuntu@108.137.37.171 "cd wa-web && ./deploy.sh"
+ssh -i "/Users/danielbudiono/cursor_projects/multi wa whatwappwebjs/LightsailDefaultKey-ap-southeast-3.pem" ubuntu@108.137.37.171 "cd wa-web && ./scripts/deploy.sh"
 ```
 
 ---

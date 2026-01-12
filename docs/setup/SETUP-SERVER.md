@@ -91,7 +91,7 @@ cp -r frontend/dist/* public/
 ### **8. Setup Admin User**
 
 ```bash
-node setup-admin.js
+node scripts/setup-admin.js
 ```
 
 ### **9. Setup Systemd Service**
@@ -208,9 +208,9 @@ sudo ufw enable
    sudo systemctl restart wa-web.service
    ```
 
-**Atau gunakan `deploy.sh`:**
+**Atau gunakan `scripts/deploy.sh`:**
 ```bash
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 ---

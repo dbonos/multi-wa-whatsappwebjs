@@ -115,7 +115,7 @@ sudo systemctl restart multi-wa-whatsappwebjs.service
 mysql -h localhost -P 5508 -u root -p wa_manager -e "SHOW TABLES;"
 
 # From local (via SSH tunnel)
-./start-tunnel.sh  # Terminal 1
+./scripts/start-tunnel.sh  # Terminal 1
 mysql -h 127.0.0.1 -P 5508 -u root -p wa_manager -e "SHOW TABLES;"  # Terminal 2
 ```
 

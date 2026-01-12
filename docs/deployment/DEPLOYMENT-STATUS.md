@@ -100,9 +100,9 @@ sudo systemctl restart wa-web.service
 
 ---
 
-**Or use deploy.sh script after fixing git:**
+**Or use scripts/deploy.sh script after fixing git:**
 ```bash
 cd ~/wa-web
-./deploy.sh
+./scripts/deploy.sh
 ```
 

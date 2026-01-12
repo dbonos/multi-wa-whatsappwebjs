@@ -29,12 +29,12 @@ ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-1.pem ubuntu@yamaha-bandung.id
 cd wa-web
 
 # Run deployment script
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 ## 📋 Deployment Script
 
-Script `deploy.sh` akan otomatis:
+Script `scripts/deploy.sh` akan otomatis:
 1. Pull latest code dari GitHub
 2. Install/update dependencies
 3. Restart service
@@ -111,7 +111,8 @@ curl -X POST http://localhost:3000/message/send \
 ├── node_modules/
 ├── index.js           # Main application
 ├── package.json
-├── deploy.sh          # Deployment script
+├── scripts/
+│   └── deploy.sh      # Deployment script
 └── README.md
 ```
 
@@ -184,7 +185,7 @@ sudo systemctl restart wa-web.service
 ### Permission errors
 ```bash
 sudo chown -R ubuntu:ubuntu /home/ubuntu/wa-web
-chmod +x deploy.sh
+chmod +x scripts/deploy.sh
 ```
 
 ### Git pull errors

@@ -80,7 +80,7 @@ VITE_SOCKET_URL=http://YOUR_SERVER_IP:3000
 ### **4. Setup Admin User**
 
 ```bash
-node setup-admin.js
+node scripts/setup-admin.js
 ```
 
 Ini akan membuat user admin dengan:
@@ -178,7 +178,7 @@ Sebelum mulai, pastikan:
 - [ ] Migrations sudah di-import
 - [ ] `.env` file sudah di-edit dengan password database
 - [ ] `frontend/.env` sudah di-edit dengan IP server (jika berbeda)
-- [ ] Admin user sudah dibuat (`node setup-admin.js`)
+- [ ] Admin user sudah dibuat (`node scripts/setup-admin.js`)
 - [ ] Server sudah running (`npm start`)
 
 ---
