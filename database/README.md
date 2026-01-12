@@ -18,7 +18,7 @@ mysql -u root -p < database/schema.sql
 Create `.env` file:
 ```env
 DB_HOST=localhost
-DB_PORT=3306
+DB_PORT=5508
 DB_USER=wa_manager
 DB_PASSWORD=your_secure_password
 DB_NAME=wa_manager

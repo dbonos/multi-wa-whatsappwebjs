@@ -60,7 +60,7 @@ ATTACHMENTS_DIR=./attachments
 
 ```bash
 # Test MySQL connection via tunnel
-mysql -h 127.0.0.1 -P 3306 -u root -p wa_manager -e "SHOW TABLES;"
+mysql -h 127.0.0.1 -P 5508 -u root -p wa_manager -e "SHOW TABLES;"
 ```
 
 **Atau test dari Node.js:**
@@ -277,7 +277,7 @@ ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171
 
 ```bash
 # Test via tunnel
-mysql -h 127.0.0.1 -P 3306 -u root -p wa_manager -e "SHOW TABLES;"
+mysql -h 127.0.0.1 -P 5508 -u root -p wa_manager -e "SHOW TABLES;"
 
 # Check .env
 cat .env | grep DB_
@@ -286,7 +286,7 @@ cat .env | grep DB_
 lsof -i :5508
 ```
 
-### **Port 3306 sudah digunakan**
+### **Port 5508 sudah digunakan**
 
 ```bash
 # Check process
