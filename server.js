@@ -1563,27 +1563,6 @@ server.listen(PORT, () => {
     console.log(`   GET  /api/webhooks - List webhooks`);
 });
 
-// ============================================
-// START SERVER
-// ============================================
-
-server.listen(PORT, () => {
-    console.log(`🚀 WhatsApp Multi-Instance API Server running on port ${PORT}`);
-    console.log(`📡 WebSocket server ready`);
-    console.log(`📚 API Documentation:`);
-    console.log(`   POST /api/auth/login - Login`);
-    console.log(`   GET  /api/sessions - List sessions`);
-    console.log(`   POST /api/sessions - Create session`);
-    console.log(`   GET  /api/sessions/:id/qr - Get QR code`);
-    console.log(`   POST /api/messages/send - Send message`);
-    console.log(`   GET  /api/messages - Get sent messages`);
-    console.log(`   POST /api/messages/typing - Send typing signal`);
-    console.log(`   POST /api/status/set - Set status`);
-    console.log(`   POST /api/stories/set - Set story`);
-    console.log(`   POST /api/broadcast/send - Send broadcast`);
-    console.log(`   GET  /api/webhooks - List webhooks`);
-});
-
 // Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down gracefully...');
