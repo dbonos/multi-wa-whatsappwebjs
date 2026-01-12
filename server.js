@@ -757,7 +757,12 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         // Send with attachment
         if (file) {
             const media = MessageMedia.fromFilePath(file.path);
-            if (caption) media.caption = caption;
+            // If there's text with attachment, use it as caption
+            // Priority: caption field > message field
+            const mediaCaption = caption || message || null;
+            if (mediaCaption) {
+                media.caption = mediaCaption;
+            }
 
             sentMessage = await client.sendMessage(chatId, media);
         } else {
@@ -780,8 +785,10 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 phone,
                 chatId,
                 file ? file.mimetype.split('/')[0] : 'text',
-                message || caption || '',
-                caption || null,
+                // For attachment: use caption if exists, otherwise message. For text: use message
+                file ? (caption || message || '') : (message || ''),
+                // Caption field: only set if there's attachment and caption exists
+                file ? (caption || message || null) : null,
                 Math.floor(Date.now() / 1000),
                 file ? file.path : null
             ]

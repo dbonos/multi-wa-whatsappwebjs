@@ -317,7 +317,12 @@ export default function Messages() {
         const formData = new FormData();
         formData.append('sessionId', sessionIdToSend);
         formData.append('phone', phoneToSend);
-        if (messageToSend) formData.append('message', messageToSend);
+        // If there's text with attachment, send it as both message and caption
+        // Backend will use it as caption for the media
+        if (messageToSend) {
+          formData.append('message', messageToSend);
+          formData.append('caption', messageToSend); // Also send as caption for clarity
+        }
         formData.append('attachment', attachment);
         
         // Debug: verify FormData contents
