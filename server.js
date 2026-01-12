@@ -1532,6 +1532,16 @@ function createClient(sessionId) {
     return client;
 }
 
+// SPA fallback - serve index.html for all non-API routes (must be last, before server.listen!)
+app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/')) {
+        return next();
+    }
+    // Serve index.html for all other routes (SPA routing)
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // ============================================
 // START SERVER
 // ============================================
@@ -1551,16 +1561,6 @@ server.listen(PORT, () => {
     console.log(`   POST /api/stories/set - Set story`);
     console.log(`   POST /api/broadcast/send - Send broadcast`);
     console.log(`   GET  /api/webhooks - List webhooks`);
-});
-
-// SPA fallback - serve index.html for all non-API routes (must be last, before server.listen!)
-app.get('*', (req, res, next) => {
-    // Skip API routes
-    if (req.path.startsWith('/api/')) {
-        return next();
-    }
-    // Serve index.html for all other routes (SPA routing)
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ============================================
