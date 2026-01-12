@@ -1354,6 +1354,7 @@ app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
 // ============================================
 
 function createClient(sessionId) {
+    console.log(`🔧 [CREATE CLIENT] Creating WhatsApp client for session: ${sessionId}`);
     const client = new Client({
         authStrategy: new LocalAuth({
             clientId: sessionId
@@ -1371,6 +1372,14 @@ function createClient(sessionId) {
                 '--disable-gpu'
             ]
         }
+    });
+    console.log(`🔧 [CREATE CLIENT] Client object created for session: ${sessionId}`);
+
+    // Loading screen event (before QR)
+    client.on('loading_screen', (percent, message) => {
+        console.log(`⏳ [LOADING] Session ${sessionId}: ${percent}% - ${message}`);
+        sessionStatuses.set(sessionId, `loading_${percent}`);
+        socketHandler.emitSessionStatus(sessionId, 'loading', { percent, message });
     });
 
     // QR Code event
