@@ -599,27 +599,31 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
     
     if (contentType.includes('multipart/form-data')) {
         // Use multer for FormData
-        // Use .any() to handle both files and fields, or .none() if no files expected
-        // But we need to check if there's actually a file first
-        // For now, use .any() which should parse both fields and files
-        upload.any()(req, res, (err) => {
+        // Try .none() first (for FormData without files), if that fails, use .any()
+        // .none() is specifically designed for FormData with only fields, no files
+        upload.none()(req, res, (err) => {
             if (err) {
-                console.error('❌ [MULTER ERROR]:', err);
-                return res.status(400).json({ error: 'File upload error: ' + err.message });
+                // If .none() fails (maybe there IS a file), try .any()
+                console.log('⚠️  [MULTER] .none() failed, trying .any()...');
+                return upload.any()(req, res, (err2) => {
+                    if (err2) {
+                        console.error('❌ [MULTER ERROR]:', err2);
+                        return res.status(400).json({ error: 'File upload error: ' + err2.message });
+                    }
+                    console.log(`✅ [MULTER] Parsed FormData (with files):`, {
+                        bodyKeys: Object.keys(req.body || {}),
+                        bodyValues: req.body,
+                        filesCount: req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0
+                    });
+                    next();
+                });
             }
-            console.log(`✅ [MULTER] Parsed FormData:`, {
+            console.log(`✅ [MULTER] Parsed FormData (no files):`, {
                 bodyKeys: Object.keys(req.body || {}),
                 bodyValues: req.body,
-                bodyRaw: JSON.stringify(req.body),
-                files: req.files,
-                filesCount: req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0,
-                // Debug: log each field individually
                 sessionId: req.body?.sessionId,
                 phone: req.body?.phone,
-                message: req.body?.message,
-                // Check if body is populated
-                bodyType: typeof req.body,
-                bodyConstructor: req.body?.constructor?.name
+                message: req.body?.message
             });
             next();
         });
