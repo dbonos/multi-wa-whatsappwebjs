@@ -3,9 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { sessionsAPI } from '../services/api';
 import socketService from '../services/socket';
 import SessionCard from '../components/SessionCard';
+import { useAuth } from '../contexts/AuthContext';
 import { Plus, Loader2, RefreshCw, Search } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
+  const { isAdmin } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newSessionId, setNewSessionId] = useState('');
@@ -56,7 +59,7 @@ export default function Dashboard() {
       setNewSessionId('');
       await loadSessions();
     } catch (error) {
-      alert('Failed to create session: ' + (error.response?.data?.error || error.message));
+      toast.error('Failed to create session: ' + (error.response?.data?.error || error.message));
     } finally {
       setCreating(false);
     }
@@ -121,43 +124,45 @@ export default function Dashboard() {
         </button>
       </motion.div>
 
-      {/* Create New Session */}
-      <motion.div
-        variants={itemVariants}
-        initial="hidden"
-        animate="visible"
-        className="card bg-gradient-to-r from-whatsapp to-whatsapp-dark text-white"
-      >
-        <h2 className="text-xl font-semibold mb-4">Add New WhatsApp Session</h2>
-        <form onSubmit={handleCreateSession} className="flex gap-2">
-          <input
-            type="text"
-            value={newSessionId}
-            onChange={(e) => setNewSessionId(e.target.value)}
-            placeholder="Enter session name (e.g., my_whatsapp_1)"
-            className="flex-1 px-4 py-2 rounded-lg bg-white/20 backdrop-blur-sm border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/50"
-            required
-            disabled={creating}
-          />
-          <button
-            type="submit"
-            disabled={creating || !newSessionId.trim()}
-            className="btn bg-white text-whatsapp hover:bg-gray-100 flex items-center gap-2 px-6 disabled:opacity-50"
-          >
-            {creating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <Plus className="w-4 h-4" />
-                Create
-              </>
-            )}
-          </button>
-        </form>
-      </motion.div>
+      {/* Create New Session - Admin Only */}
+      {isAdmin && (
+        <motion.div
+          variants={itemVariants}
+          initial="hidden"
+          animate="visible"
+          className="card bg-gradient-to-r from-whatsapp to-whatsapp-dark text-white"
+        >
+          <h2 className="text-xl font-semibold mb-4">Add New WhatsApp Session</h2>
+          <form onSubmit={handleCreateSession} className="flex gap-2">
+            <input
+              type="text"
+              value={newSessionId}
+              onChange={(e) => setNewSessionId(e.target.value)}
+              placeholder="Enter session name (e.g., my_whatsapp_1)"
+              className="flex-1 px-4 py-2 rounded-lg bg-white/20 backdrop-blur-sm border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/50"
+              required
+              disabled={creating}
+            />
+            <button
+              type="submit"
+              disabled={creating || !newSessionId.trim()}
+              className="btn bg-white text-whatsapp hover:bg-gray-100 flex items-center gap-2 px-6 disabled:opacity-50"
+            >
+              {creating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Create
+                </>
+              )}
+            </button>
+          </form>
+        </motion.div>
+      )}
 
       {/* Search */}
       <AnimatePresence>
