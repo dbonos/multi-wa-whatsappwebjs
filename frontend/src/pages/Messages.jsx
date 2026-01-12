@@ -224,7 +224,16 @@ export default function Messages() {
     try {
       // If no attachment, send as JSON (simpler and more reliable)
       // If attachment exists, use FormData
+      console.log('🔍 [FRONTEND] Preparing to send message:', {
+        hasAttachment: !!attachment,
+        attachmentType: attachment?.type,
+        selectedSession,
+        phone: phone.trim(),
+        messageLength: message.trim().length
+      });
+      
       if (attachment) {
+        console.log('📎 [FRONTEND] Using FormData (has attachment)');
         const formData = new FormData();
         formData.append('sessionId', selectedSession);
         formData.append('phone', phone.trim());
@@ -232,13 +241,14 @@ export default function Messages() {
         formData.append('attachment', attachment);
         await messagesAPI.send(formData);
       } else {
-        // Send as JSON when no attachment
-        console.log('Sending JSON:', { sessionId: selectedSession, phone: phone.trim(), message: message.trim() });
-        await messagesAPI.send({
+        console.log('📝 [FRONTEND] Using JSON (no attachment)');
+        const jsonData = {
           sessionId: selectedSession,
           phone: phone.trim(),
           message: message.trim()
-        });
+        };
+        console.log('📤 [FRONTEND] Sending JSON data:', jsonData);
+        await messagesAPI.send(jsonData);
       }
       
       setPhone('');
