@@ -1553,6 +1553,16 @@ server.listen(PORT, () => {
     console.log(`   GET  /api/webhooks - List webhooks`);
 });
 
+// SPA fallback - serve index.html for all non-API routes (must be last!)
+app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/')) {
+        return next();
+    }
+    // Serve index.html for all other routes (SPA routing)
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down gracefully...');
