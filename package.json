@@ -4,8 +4,9 @@
   "description": "Multi WhatsApp Web Instance Manager",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "legacy": "node index.js"
   },
   "keywords": ["whatsapp", "whatsapp-web", "multi-instance"],
   "author": "",

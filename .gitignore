@@ -30,4 +30,16 @@ Thumbs.db
 # PM2
 .pm2/
 
+# Attachments
+attachments/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.mp4
+*.mp3
+*.pdf
+*.doc
+*.docx
+
 

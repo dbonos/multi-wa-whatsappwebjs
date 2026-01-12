@@ -92,7 +92,7 @@ class MessageHandler {
                 
                 if (mediaType.startsWith('image/')) messageType = 'image';
                 else if (mediaType.startsWith('video/')) messageType = 'video';
-                else if (mediaType.startsWith('audio/')) messageType = audio;
+                else if (mediaType.startsWith('audio/')) messageType = 'audio';
                 else if (mediaType.includes('pdf') || mediaType.includes('document')) messageType = 'document';
                 else messageType = 'other';
 
