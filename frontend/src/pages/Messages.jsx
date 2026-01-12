@@ -213,6 +213,12 @@ export default function Messages() {
   const handleSend = async (e) => {
     e.preventDefault();
     if (!phone.trim() || (!message.trim() && !attachment)) return;
+    
+    // Validate session is selected
+    if (!selectedSession) {
+      toast.error('Please select a session first');
+      return;
+    }
 
     setSending(true);
     try {
@@ -221,15 +227,16 @@ export default function Messages() {
       if (attachment) {
         const formData = new FormData();
         formData.append('sessionId', selectedSession);
-        formData.append('phone', phone);
-        if (message.trim()) formData.append('message', message);
+        formData.append('phone', phone.trim());
+        if (message.trim()) formData.append('message', message.trim());
         formData.append('attachment', attachment);
         await messagesAPI.send(formData);
       } else {
         // Send as JSON when no attachment
+        console.log('Sending JSON:', { sessionId: selectedSession, phone: phone.trim(), message: message.trim() });
         await messagesAPI.send({
           sessionId: selectedSession,
-          phone: phone,
+          phone: phone.trim(),
           message: message.trim()
         });
       }
