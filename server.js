@@ -31,7 +31,23 @@ const qrCodes = new Map(); // sessionId -> qrCode
 const sessionStatuses = new Map(); // sessionId -> status
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Allow inline scripts for React
+            styleSrc: ["'self'", "'unsafe-inline'", "https:"], // Allow inline styles
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", "http://108.137.37.171:3000", "ws://108.137.37.171:3000"], // Allow WebSocket
+            fontSrc: ["'self'", "data:", "https:"],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"],
+        },
+    },
+    crossOriginOpenerPolicy: false, // Disable COOP for HTTP
+    crossOriginResourcePolicy: false, // Disable CORP for HTTP
+}));
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
