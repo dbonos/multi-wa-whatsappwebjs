@@ -386,8 +386,12 @@ app.post('/api/sessions', authenticate, requireAdmin, async (req, res) => {
         sessionStatuses.set(sessionId, 'initializing');
 
         // Initialize client
-        client.initialize().catch(err => {
-            console.error(`Error initializing session ${sessionId}:`, err);
+        console.log(`🚀 [CREATE SESSION] Starting initialization for session: ${sessionId}`);
+        client.initialize().then(() => {
+            console.log(`✅ [CREATE SESSION] Client initialization started successfully for: ${sessionId}`);
+        }).catch(err => {
+            console.error(`❌ [CREATE SESSION] Error initializing session ${sessionId}:`, err);
+            console.error(`❌ [CREATE SESSION] Error stack:`, err.stack);
         });
 
         res.json({
@@ -1371,7 +1375,8 @@ function createClient(sessionId) {
 
     // QR Code event
     client.on('qr', async (qr) => {
-        console.log(`[${sessionId}] QR Code received`);
+        console.log(`📱 [QR CODE] QR Code received for session: ${sessionId}`);
+        console.log(`📱 [QR CODE] QR Code length: ${qr.length} characters`);
         qrCodes.set(sessionId, qr);
         sessionStatuses.set(sessionId, 'qr_generated');
 
@@ -1402,7 +1407,7 @@ function createClient(sessionId) {
 
     // Ready event
     client.on('ready', async () => {
-        console.log(`[${sessionId}] Client is ready!`);
+        console.log(`✅ [READY] Client is ready for session: ${sessionId}`);
         sessionStatuses.set(sessionId, 'ready');
         qrCodes.delete(sessionId);
 
@@ -1527,7 +1532,7 @@ function createClient(sessionId) {
 
     // Disconnected
     client.on('disconnected', async (reason) => {
-        console.log(`[${sessionId}] Client disconnected:`, reason);
+        console.log(`🔌 [DISCONNECTED] Client disconnected for session ${sessionId}:`, reason);
         sessionStatuses.set(sessionId, 'disconnected');
         clients.delete(sessionId);
 
