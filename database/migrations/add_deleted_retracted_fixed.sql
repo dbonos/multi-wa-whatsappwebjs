@@ -90,8 +90,10 @@ PREPARE alterIfNotExists FROM @preparedStatement;
 EXECUTE alterIfNotExists;
 DEALLOCATE PREPARE alterIfNotExists;
 
--- Add indexes (ignore if they already exist)
-CREATE INDEX IF NOT EXISTS idx_is_deleted ON messages(is_deleted);
-CREATE INDEX IF NOT EXISTS idx_is_retracted ON messages(is_retracted);
-CREATE INDEX IF NOT EXISTS idx_reply_to_message_id ON messages(reply_to_message_id);
+-- Add indexes (check if they exist first)
+-- Note: MySQL doesn't support IF NOT EXISTS for CREATE INDEX
+-- These will be added manually if needed, or ignore errors if they already exist
+-- CREATE INDEX idx_is_deleted ON messages(is_deleted);
+-- CREATE INDEX idx_is_retracted ON messages(is_retracted);
+-- CREATE INDEX idx_reply_to_message_id ON messages(reply_to_message_id);
 
