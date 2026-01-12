@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Skeleton } from '../components/ui/skeleton';
+import MessageDetailModal from '../components/MessageDetailModal';
 import {
   Send,
   Paperclip,
@@ -22,6 +23,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Search,
+  Info,
 } from 'lucide-react';
 
 const statusIcons = {
@@ -48,6 +51,8 @@ export default function Messages() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalMessages, setTotalMessages] = useState(0);
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const pageSize = 20;
 
   useEffect(() => {
@@ -166,6 +171,16 @@ export default function Messages() {
 
       if (filterStatus !== 'all') {
         msgs = msgs.filter((m) => m.status === filterStatus);
+      }
+
+      // Apply search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        msgs = msgs.filter((m) => 
+          (m.to_number && m.to_number.toLowerCase().includes(query)) ||
+          (m.body && m.body.toLowerCase().includes(query)) ||
+          (m.caption && m.caption.toLowerCase().includes(query))
+        );
       }
 
       setMessages(msgs);
@@ -405,7 +420,7 @@ export default function Messages() {
       {selectedSession && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-4">
               <CardTitle>Sent Messages</CardTitle>
               <div className="flex items-center gap-2">
                 <Button
@@ -435,6 +450,18 @@ export default function Messages() {
                   </select>
                 </div>
               </div>
+            </div>
+            
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by phone number or message content..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-whatsapp"
+              />
             </div>
           </CardHeader>
           <CardContent>
@@ -489,15 +516,16 @@ export default function Messages() {
                     layout
                   >
                     <Card
-                      className={`${isDeleted ? 'opacity-60 bg-gray-100' : ''} transition-all`}
+                      className={`${isDeleted ? 'opacity-60 bg-gray-100 dark:bg-gray-800' : ''} transition-all cursor-pointer hover:shadow-md`}
+                      onClick={() => setSelectedMessageId(msg.message_id)}
                     >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className="font-medium text-gray-900">
-                              To: {msg.to_number || 'Unknown'}
-                            </span>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className="font-medium text-gray-900 dark:text-gray-100">
+                                To: {msg.to_number || 'Unknown'}
+                              </span>
                             <StatusIcon className={`w-4 h-4 ${statusColor}`} />
                             <Badge variant={msg.status === 'read' ? 'success' : msg.status === 'failed' ? 'destructive' : 'info'}>
                               {msg.status}
@@ -549,8 +577,14 @@ export default function Messages() {
                               ))}
                             </div>
                           )}
+                          
+                          {/* Click to view details */}
+                          <div className="mt-2 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                            <Info className="w-3 h-3" />
+                            <span>Click to view details</span>
+                          </div>
                         </div>
-                        <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
                           {formatDate(msg.timestamp)}
                         </span>
                       </div>
@@ -618,6 +652,15 @@ export default function Messages() {
           )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Message Detail Modal */}
+      {selectedMessageId && (
+        <MessageDetailModal
+          messageId={selectedMessageId}
+          sessionId={selectedSession}
+          onClose={() => setSelectedMessageId(null)}
+        />
       )}
     </motion.div>
   );
