@@ -370,7 +370,7 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={loading || (loginMethod === 'otp' && !otpRequested)}
+              disabled={loading || (loginType === 'user' && loginMethod === 'otp' && !otpRequested)}
               className="btn btn-primary w-full flex items-center justify-center gap-2 py-3 text-lg"
             >
               {loading ? (
