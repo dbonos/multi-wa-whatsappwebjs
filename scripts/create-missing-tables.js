@@ -15,10 +15,16 @@ async function createMissingTables() {
         
         if (tables[0].count === 0) {
             console.log('📝 Creating message_status_history table...');
+            // First check the message_id column type in messages table
+            const [msgCols] = await pool.execute('DESCRIBE messages');
+            const msgIdCol = msgCols.find(c => c.Field === 'message_id');
+            const msgIdType = msgIdCol ? msgIdCol.Type : 'VARCHAR(255)';
+            console.log(`   Found message_id type: ${msgIdType}`);
+            
             await pool.execute(`
                 CREATE TABLE IF NOT EXISTS message_status_history (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    message_id VARCHAR(255) NOT NULL,
+                    message_id ${msgIdType} NOT NULL,
                     status ENUM('pending', 'sent', 'delivered', 'read', 'played', 'failed') NOT NULL,
                     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_message_id (message_id),
