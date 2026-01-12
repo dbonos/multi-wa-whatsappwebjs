@@ -232,8 +232,11 @@ export default function Messages() {
         messageLength: message.trim().length
       });
       
-      if (attachment) {
-        console.log('📎 [FRONTEND] Using FormData (has attachment)');
+      // Explicitly check if attachment exists and is a valid File object
+      const hasAttachment = attachment && attachment instanceof File;
+      
+      if (hasAttachment) {
+        console.log('📎 [FRONTEND] Using FormData (has attachment):', attachment.name);
         const formData = new FormData();
         formData.append('sessionId', selectedSession);
         formData.append('phone', phone.trim());
