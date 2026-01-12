@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { messagesAPI, sessionsAPI } from '../services/api';
 import socketService from '../services/socket';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Skeleton } from '../components/ui/skeleton';
 import {
   Send,
   Paperclip,
@@ -18,6 +20,8 @@ import {
   Heart,
   Reply,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 const statusIcons = {
@@ -41,6 +45,10 @@ export default function Messages() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showDeleted, setShowDeleted] = useState(false);
   const [deletedMessages, setDeletedMessages] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalMessages, setTotalMessages] = useState(0);
+  const pageSize = 20;
 
   useEffect(() => {
     loadSessions();
@@ -117,9 +125,16 @@ export default function Messages() {
 
   useEffect(() => {
     if (selectedSession) {
-      loadMessages();
+      setCurrentPage(1);
+      loadMessages(1);
     }
-  }, [selectedSession, filterStatus]);
+  }, [selectedSession, filterStatus, showDeleted]);
+
+  useEffect(() => {
+    if (selectedSession && currentPage > 1) {
+      loadMessages(currentPage);
+    }
+  }, [currentPage]);
 
   const loadSessions = async () => {
     try {
@@ -136,10 +151,16 @@ export default function Messages() {
     }
   };
 
-  const loadMessages = async () => {
+  const loadMessages = async (page = 1) => {
     try {
       setLoading(true);
-      const params = { sessionId: selectedSession, limit: 50, includeDeleted: showDeleted };
+      const offset = (page - 1) * pageSize;
+      const params = { 
+        sessionId: selectedSession, 
+        limit: pageSize, 
+        offset,
+        includeDeleted: showDeleted 
+      };
       const response = await messagesAPI.list(params);
       let msgs = response.data.messages || [];
 
@@ -148,8 +169,17 @@ export default function Messages() {
       }
 
       setMessages(msgs);
+      
+      // Calculate pagination (estimate total from current data)
+      if (msgs.length === pageSize) {
+        setTotalPages(page + 1); // Assume there's more
+      } else {
+        setTotalPages(page);
+      }
+      setTotalMessages((page - 1) * pageSize + msgs.length);
     } catch (error) {
       console.error('Failed to load messages:', error);
+      toast.error('Failed to load messages: ' + (error.response?.data?.error || error.message));
     } finally {
       setLoading(false);
     }
@@ -181,9 +211,11 @@ export default function Messages() {
       setPhone('');
       setMessage('');
       setAttachment(null);
-      await loadMessages();
+      toast.success('Message sent successfully!');
+      await loadMessages(1); // Reload first page
+      setCurrentPage(1);
     } catch (error) {
-      alert('Failed to send message: ' + (error.response?.data?.error || error.message));
+      toast.error('Failed to send message: ' + (error.response?.data?.error || error.message));
     } finally {
       setSending(false);
     }
@@ -407,14 +439,25 @@ export default function Messages() {
           </CardHeader>
           <CardContent>
 
-          {loading ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center justify-center py-12"
-            >
-              <Loader2 className="w-8 h-8 animate-spin text-whatsapp" />
-            </motion.div>
+          {loading && currentPage === 1 ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <Card key={i} className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-6 w-16" />
+                      <Skeleton className="h-6 w-16" />
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
           ) : messages.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
@@ -518,6 +561,60 @@ export default function Messages() {
               })}
               </AnimatePresence>
             </motion.div>
+          )}
+
+          {/* Pagination */}
+          {!loading && messages.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t">
+              <div className="text-sm text-gray-600">
+                Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalMessages)} of {totalMessages}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-10"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
           )}
           </CardContent>
         </Card>
