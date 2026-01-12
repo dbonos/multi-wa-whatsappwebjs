@@ -25,9 +25,13 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
     // Listen for status updates
     const handleStatus = (data) => {
       if (data.sessionId === sessionId) {
-        if (data.status === 'ready') {
+        if (data.status === 'ready' || data.status === 'authenticated') {
           setStatus('ready');
           onReady?.();
+          // Auto-close after 2 seconds
+          setTimeout(() => {
+            onClose?.();
+          }, 2000);
         } else if (data.status === 'qr_generated') {
           setQrCode(data.qrCode);
           setStatus('qr_ready');
@@ -134,14 +138,17 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
             <p className="text-lg font-semibold text-gray-900 mb-2">
               Connected Successfully!
             </p>
-            <p className="text-gray-600 text-center">
+            <p className="text-gray-600 text-center mb-4">
               Your WhatsApp session is now active and ready to use.
+            </p>
+            <p className="text-sm text-gray-500 text-center mb-4">
+              This window will close automatically...
             </p>
             <button
               onClick={onClose}
-              className="mt-6 btn btn-primary"
+              className="mt-2 btn btn-primary"
             >
-              Close
+              Close Now
             </button>
             </motion.div>
           ) : error ? (
