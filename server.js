@@ -556,7 +556,21 @@ app.post('/api/messages/send', authenticate, upload.single('attachment'), async 
         const { sessionId, phone, message, caption } = req.body;
         const file = req.file;
 
+        console.log(`📤 [SEND MESSAGE] Request received:`, {
+            sessionId,
+            phone,
+            hasMessage: !!message,
+            hasCaption: !!caption,
+            hasFile: !!file,
+            bodyKeys: Object.keys(req.body)
+        });
+
         if (!sessionId || !phone) {
+            console.error(`❌ [SEND MESSAGE] Missing required fields:`, {
+                sessionId: !!sessionId,
+                phone: !!phone,
+                body: req.body
+            });
             return res.status(400).json({ error: 'sessionId and phone are required' });
         }
 
