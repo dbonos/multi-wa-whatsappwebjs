@@ -80,9 +80,12 @@ export const sessionsAPI = {
 export const messagesAPI = {
   send: (data) => {
     // If data is already FormData, use it directly
+    // Don't set Content-Type header - let browser set it with boundary
     if (data instanceof FormData) {
       return api.post('/messages/send', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: {
+          // Remove Content-Type to let browser set it automatically with boundary
+        },
       });
     }
     // Otherwise, create FormData from object
@@ -93,7 +96,9 @@ export const messagesAPI = {
       }
     });
     return api.post('/messages/send', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: {
+        // Remove Content-Type to let browser set it automatically with boundary
+      },
     });
   },
   
