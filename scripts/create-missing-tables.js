@@ -21,6 +21,7 @@ async function createMissingTables() {
             const msgIdType = msgIdCol ? msgIdCol.Type : 'VARCHAR(255)';
             console.log(`   Found message_id type: ${msgIdType}`);
             
+            // Create table without foreign key first (to avoid charset/collation issues)
             await pool.execute(`
                 CREATE TABLE IF NOT EXISTS message_status_history (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -29,10 +30,21 @@ async function createMissingTables() {
                     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_message_id (message_id),
                     INDEX idx_status (status),
-                    INDEX idx_changed_at (changed_at),
-                    FOREIGN KEY (message_id) REFERENCES messages(message_id) ON DELETE CASCADE
+                    INDEX idx_changed_at (changed_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
             `);
+            
+            // Try to add foreign key constraint separately (may fail if charset mismatch, but that's OK)
+            try {
+                await pool.execute(`
+                    ALTER TABLE message_status_history 
+                    ADD CONSTRAINT fk_message_status_history_message_id 
+                    FOREIGN KEY (message_id) REFERENCES messages(message_id) ON DELETE CASCADE
+                `);
+                console.log('✅ Foreign key constraint added');
+            } catch (fkError) {
+                console.log('⚠️  Foreign key constraint skipped (may already exist or charset mismatch)');
+            }
             console.log('✅ message_status_history table created!');
         } else {
             console.log('✅ message_status_history table already exists');
