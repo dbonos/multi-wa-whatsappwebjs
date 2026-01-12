@@ -26,12 +26,12 @@
 **Di terminal lokal, buat SSH tunnel:**
 ```bash
 ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem \
-    -L 3306:localhost:3306 \
+    -L 5508:localhost:5508 \
     ubuntu@108.137.37.171 -N
 ```
 
 **Penjelasan:**
-- `-L 3306:localhost:3306` → Forward port 3306 dari server ke local
+- `-L 5508:localhost:5508` → Forward port 5508 dari server ke local
 - `-N` → No command execution, hanya tunnel
 
 **Biarkan terminal ini terbuka!** Tunnel akan aktif selama terminal terbuka.
@@ -54,7 +54,7 @@ JWT_SECRET=bf5bf2393bd10ba9bfeca8329f143c69303a3953f4cb6667e100f8f1fa7c1fdf
 ATTACHMENTS_DIR=./attachments
 ```
 
-**Note:** `DB_HOST=localhost` karena SSH tunnel forward ke localhost:3306
+**Note:** `DB_HOST=localhost` karena SSH tunnel forward ke localhost:5508
 
 #### **3. Test Connection**
 
@@ -121,7 +121,7 @@ EXIT;
 
 **Setup firewall (allow MySQL port):**
 ```bash
-sudo ufw allow 3306/tcp
+sudo ufw allow 5508/tcp
 ```
 
 #### **2. Edit .env di Localhost**
@@ -159,7 +159,7 @@ mysql -h 108.137.37.171 -u remote_dev -p wa_manager -e "SHOW TABLES;"
 ```bash
 # Terminal 1: SSH Tunnel (biarkan running)
 ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem \
-    -L 3306:localhost:3306 \
+    -L 5508:localhost:5508 \
     ubuntu@108.137.37.171 -N
 ```
 
@@ -189,7 +189,7 @@ npm run dev
 
 echo "🔗 Starting SSH tunnel for database..."
 ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem \
-    -L 3306:localhost:3306 \
+    -L 5508:localhost:5508 \
     ubuntu@108.137.37.171 -N
 
 # Jika tunnel terputus, akan otomatis reconnect
@@ -283,24 +283,24 @@ mysql -h 127.0.0.1 -P 3306 -u root -p wa_manager -e "SHOW TABLES;"
 cat .env | grep DB_
 
 # Check tunnel running
-lsof -i :3306
+lsof -i :5508
 ```
 
 ### **Port 3306 sudah digunakan**
 
 ```bash
 # Check process
-lsof -i :3306
+lsof -i :5508
 
 # Kill process jika perlu
 kill -9 <PID>
 
 # Atau gunakan port lain
 ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem \
-    -L 3307:localhost:3306 \
+    -L 5509:localhost:5508 \
     ubuntu@108.137.37.171 -N
 
-# Update .env: DB_HOST=localhost, DB_PORT=3307
+# Update .env: DB_HOST=localhost, DB_PORT=5509
 ```
 
 ---
