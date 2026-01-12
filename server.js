@@ -591,6 +591,22 @@ const upload = multer({
     preservePath: true
 });
 
+// Create a custom multer instance that always parses fields
+// Use .fields() to explicitly handle both fields and files
+const uploadWithFields = multer({
+    storage: storage,
+    limits: { fileSize: 50 * 1024 * 1024 },
+    preservePath: true
+}).fields([
+    { name: 'sessionId', maxCount: 1 },
+    { name: 'phone', maxCount: 1 },
+    { name: 'message', maxCount: 1 },
+    { name: 'caption', maxCount: 1 },
+    { name: 'attachment', maxCount: 1 }
+]);
+
+// Also keep the original upload.any() as fallback
+
 // Send message (text or attachment)
 // Handle both JSON (no attachment) and FormData (with attachment)
 app.post('/api/messages/send', authenticate, (req, res, next) => {
@@ -610,32 +626,51 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
     
     if (contentType.includes('multipart/form-data')) {
         console.log(`📦 [MULTER] Detected multipart/form-data, using multer...`);
-        // Use multer for FormData
-        // Try .none() first (for FormData without files), if that fails, use .any()
-        // .none() is specifically designed for FormData with only fields, no files
-        upload.none()(req, res, (err) => {
+        // Use .fields() to explicitly parse both fields and files
+        uploadWithFields(req, res, (err) => {
             if (err) {
-                // If .none() fails (maybe there IS a file), try .any()
-                console.log(`⚠️  [MULTER] .none() failed: ${err.message}`);
-                console.log(`⚠️  [MULTER] Trying .any() instead...`);
-                return upload.any()(req, res, (err2) => {
-                    if (err2) {
-                        console.error(`❌ [MULTER ERROR]:`, err2);
-                        return res.status(400).json({ error: 'File upload error: ' + err2.message });
+                console.error(`❌ [MULTER ERROR]:`, err);
+                console.error(`❌ [MULTER ERROR] Stack:`, err.stack);
+                return res.status(400).json({ error: 'File upload error: ' + err.message });
+            }
+            
+            // Handle files from req.files (multer.fields() returns object with field names as keys)
+            if (req.files && typeof req.files === 'object') {
+                // Convert files object to array for easier handling
+                const filesArray = [];
+                Object.keys(req.files).forEach(fieldname => {
+                    if (Array.isArray(req.files[fieldname])) {
+                        filesArray.push(...req.files[fieldname]);
+                    } else {
+                        filesArray.push(req.files[fieldname]);
                     }
-                    console.log(`✅ [MULTER] Parsed FormData (with files):`, {
-                        bodyKeys: Object.keys(req.body || {}),
-                        sessionId: req.body?.sessionId,
-                        phone: req.body?.phone
-                    });
-                    next();
+                });
+                req.files = filesArray;
+            }
+            
+            // Log parsed data
+            console.log(`✅ [MULTER] Parsed FormData:`, {
+                bodyKeys: Object.keys(req.body || {}),
+                bodyValues: req.body,
+                sessionId: req.body?.sessionId,
+                phone: req.body?.phone,
+                message: req.body?.message,
+                caption: req.body?.caption,
+                filesCount: req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0,
+                files: req.files ? (Array.isArray(req.files) ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'not array') : 'no files'
+            });
+            
+            // Verify required fields are present
+            if (!req.body?.sessionId || !req.body?.phone) {
+                console.error(`❌ [MULTER] Missing required fields after parsing:`, {
+                    hasSessionId: !!req.body?.sessionId,
+                    hasPhone: !!req.body?.phone,
+                    bodyKeys: Object.keys(req.body || {}),
+                    bodyRaw: JSON.stringify(req.body),
+                    contentType: req.headers['content-type']
                 });
             }
-            console.log(`✅ [MULTER] Parsed FormData (no files):`, {
-                bodyKeys: Object.keys(req.body || {}),
-                sessionId: req.body?.sessionId,
-                phone: req.body?.phone
-            });
+            
             next();
         });
     } else {
