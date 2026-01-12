@@ -1229,7 +1229,7 @@ app.get('/api/contacts', authenticate, async (req, res) => {
                 COUNT(DISTINCT c.id) as total,
                 COUNT(DISTINCT CASE WHEN c.phone_number IS NOT NULL THEN c.id END) as with_phone,
                 COUNT(DISTINCT CASE WHEN c.phone_number IS NULL THEN c.id END) as without_phone,
-                COUNT(DISTINCT CASE WHEN c.is_group = TRUE THEN c.id END) as groups,
+                COUNT(DISTINCT CASE WHEN c.is_group = TRUE THEN c.id END) as \`groups\`,
                 COUNT(DISTINCT CASE WHEN c.is_business = TRUE THEN c.id END) as business
             FROM contacts c
         `;
