@@ -419,10 +419,10 @@ sudo chown -R ubuntu:ubuntu ~/wa-web/.wwebjs_auth/
 
 ## 📚 Related Documentation
 
-- [CAPABILITIES.md](CAPABILITIES.md) - All features
+- [CAPABILITIES.md](CAPABILITIES.md) - All features (same folder)
 - [PUPPETEER.md](PUPPETEER.md) - Browser automation details
 - [SERVER-CONFIG.md](SERVER-CONFIG.md) - Server setup
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guide
+- [DEPLOYMENT.md](../deployment/DEPLOYMENT.md) - Deployment guide
 
 ---
 

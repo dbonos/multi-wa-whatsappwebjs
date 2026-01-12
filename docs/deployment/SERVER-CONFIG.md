@@ -212,10 +212,10 @@ sudo systemctl restart wa-web.service
 ## 📚 Documentation Links
 
 - [README.md](README.md) - Overview & quick start
-- [CAPABILITIES.md](CAPABILITIES.md) - All features
+- [CAPABILITIES.md](../features/CAPABILITIES.md) - All features
 - [PUPPETEER.md](PUPPETEER.md) - Puppeteer details
-- [LID-HANDLING.md](LID-HANDLING.md) - @lid solutions
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Full deployment guide
+- [LID-HANDLING.md](../features/LID-HANDLING.md) - @lid solutions
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Full deployment guide (same folder)
 - [SUMMARY.md](SUMMARY.md) - Executive summary
 
 ---

@@ -4,7 +4,7 @@ Multi-instance WhatsApp Web API menggunakan whatsapp-web.js dengan **advanced @l
 
 ## 🚀 **QUICK START**
 
-**Baru pertama kali setup?** Baca **[START-HERE.md](START-HERE.md)** untuk panduan lengkap!
+**Baru pertama kali setup?** Baca **[START-HERE.md](docs/setup/START-HERE.md)** untuk panduan lengkap!
 
 **Sudah setup?** Langsung ke [Installation](#installation) atau [Usage](#usage)
 
@@ -25,7 +25,7 @@ WhatsApp menggunakan 2 tipe identifier:
 
 **Solution**: API ini menyediakan multiple methods untuk extract phone numbers dan stats lengkap tentang contact @lid vs @c.us.
 
-📖 **[Read full @lid documentation →](LID-HANDLING.md)**
+📖 **[Read full @lid documentation →](docs/features/LID-HANDLING.md)**
 
 ## 📚 Documentation
 
@@ -207,9 +207,9 @@ curl -X POST http://localhost:3000/message/send \
 
 ## 📚 Documentation
 
-- **[Deployment Guide](DEPLOYMENT.md)** - Full deployment workflow
-- **[@lid Handling Guide](LID-HANDLING.md)** - Complete guide for @lid problem
-- **[Test Script](test-lid.sh)** - Interactive testing tool
+- **[Deployment Guide](docs/deployment/DEPLOYMENT.md)** - Full deployment workflow
+- **[@lid Handling Guide](docs/features/LID-HANDLING.md)** - Complete guide for @lid problem
+- **[Test Script](scripts/test-lid.sh)** - Interactive testing tool
 
 ## 🔥 Why This Implementation?
 

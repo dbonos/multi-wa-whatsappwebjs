@@ -197,7 +197,7 @@ mysql -u root -p wa_manager -e "SELECT * FROM users;"
 ## 📚 **Dokumentasi Lengkap**
 
 - **[START-HERE.md](START-HERE.md)** - Panduan lengkap untuk pertama kali setup
-- **[SETUP-GUIDE.md](SETUP-GUIDE.md)** - Panduan setup detail
+- **[SETUP-GUIDE.md](../setup/SETUP-GUIDE.md)** - Panduan setup detail
 - **[QUICK-START.md](QUICK-START.md)** - Quick start guide
 - **[API-DOCUMENTATION.md](API-DOCUMENTATION.md)** - Dokumentasi API lengkap
 - **[FEATURES.md](FEATURES.md)** - Daftar fitur lengkap
@@ -216,5 +216,5 @@ Setelah semua checklist di atas selesai, aplikasi Anda siap digunakan!
 
 ---
 
-**Need Help?** Lihat dokumentasi lengkap atau check `START-HERE.md`
+**Need Help?** Lihat dokumentasi lengkap di `docs/` folder atau check `docs/setup/START-HERE.md`
 

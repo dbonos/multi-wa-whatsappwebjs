@@ -91,6 +91,6 @@ VITE_SOCKET_URL=http://108.137.37.171:3000
 
 - **[SETUP-LOCALHOST.md](SETUP-LOCALHOST.md)** - Setup untuk development lokal
 - **[SETUP-SERVER.md](SETUP-SERVER.md)** - Setup untuk production server
-- **[SETUP-GUIDE.md](SETUP-GUIDE.md)** - Panduan setup umum
+- **[SETUP-GUIDE.md](SETUP-GUIDE.md)** - Panduan setup umum (same folder)
 - **[QUICK-START.md](QUICK-START.md)** - Quick start guide
 

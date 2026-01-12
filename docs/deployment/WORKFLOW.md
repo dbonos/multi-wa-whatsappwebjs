@@ -427,7 +427,7 @@ ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~
 
 - **[SETUP-LOCALHOST.md](SETUP-LOCALHOST.md)** - Setup untuk localhost
 - **[SETUP-SERVER.md](SETUP-SERVER.md)** - Setup untuk server
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment guide
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment guide (same folder)
 - **[deploy.sh](deploy.sh)** - Deployment script
 
 ---

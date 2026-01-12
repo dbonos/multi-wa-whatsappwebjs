@@ -178,6 +178,6 @@ echo "   Password: admin123"
 echo ""
 echo "4. Create Session & Scan QR Code"
 echo ""
-echo "📚 For production deployment, see SETUP-GUIDE.md"
+echo "📚 For production deployment, see docs/setup/SETUP-GUIDE.md"
 echo ""
 

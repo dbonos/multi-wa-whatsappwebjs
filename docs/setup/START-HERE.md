@@ -162,11 +162,11 @@ sudo journalctl -u wa-web.service -f
 
 ## 📚 **Dokumentasi Lengkap**
 
-- **`SETUP-GUIDE.md`** - Panduan setup lengkap
+- **`docs/setup/SETUP-GUIDE.md`** - Panduan setup lengkap
 - **`QUICK-START.md`** - Quick start guide
 - **`API-DOCUMENTATION.md`** - Dokumentasi API lengkap
 - **`FEATURES.md`** - Daftar fitur lengkap
-- **`DEPLOYMENT.md`** - Panduan deployment
+- **`docs/deployment/DEPLOYMENT.md`** - Panduan deployment
 
 ---
 
@@ -226,5 +226,5 @@ Setelah semua langkah di atas, aplikasi Anda siap digunakan!
 
 ---
 
-**Need Help?** Check dokumentasi lengkap di folder project atau lihat `SETUP-GUIDE.md`
+**Need Help?** Check dokumentasi lengkap di `docs/` folder atau lihat `docs/setup/SETUP-GUIDE.md`
 
