@@ -268,30 +268,4 @@ export default function Dashboard() {
     </motion.div>
   );
 }
-            <p className="text-sm text-gray-600">Total Sessions</p>
-            <p className="text-2xl font-bold text-gray-900">{sessions.length}</p>
-          </div>
-          <div className="card">
-            <p className="text-sm text-gray-600">Active</p>
-            <p className="text-2xl font-bold text-green-600">
-              {sessions.filter((s) => s.realtime_status === 'ready').length}
-            </p>
-          </div>
-          <div className="card">
-            <p className="text-sm text-gray-600">Total Messages</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {sessions.reduce((sum, s) => sum + (s.message_count || 0), 0)}
-            </p>
-          </div>
-          <div className="card">
-            <p className="text-sm text-gray-600">Total Contacts</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {sessions.reduce((sum, s) => sum + (s.contact_count || 0), 0)}
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 

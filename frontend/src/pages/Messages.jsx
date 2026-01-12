@@ -325,7 +325,7 @@ export default function Messages() {
             </>
           )}
         </select>
-      </div>
+      </motion.div>
 
       {/* Send Message Form */}
       <AnimatePresence>
