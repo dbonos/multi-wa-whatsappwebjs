@@ -767,3 +767,4 @@ const filteredMsgs = await chat.fetchMessages({
 - GitHub: https://github.com/pedroslopez/whatsapp-web.js
 - Examples: https://github.com/pedroslopez/whatsapp-web.js/tree/main/example
 
+

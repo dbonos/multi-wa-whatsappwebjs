@@ -24,3 +24,4 @@ sudo systemctl status wa-web.service --no-pager
 
 echo "🎉 Deployment completed!"
 
+

@@ -91,3 +91,4 @@ echo ""
 echo "To stop the session:"
 echo "curl -X POST $API_URL/session/stop -H 'Content-Type: application/json' -d '{\"sessionId\": \"$SESSION_ID\"}'"
 
+

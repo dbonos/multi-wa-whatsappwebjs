@@ -449,3 +449,4 @@ Current Setup: ✅ Optimized dengan single-process
 
 **Bottom line:** Puppeteer adalah pilihan yang tepat untuk production stability, meskipun butuh resource lebih banyak. 🚀
 
+
