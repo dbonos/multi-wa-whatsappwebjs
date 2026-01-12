@@ -595,41 +595,59 @@ const upload = multer({
 // Handle both JSON (no attachment) and FormData (with attachment)
 app.post('/api/messages/send', authenticate, (req, res, next) => {
     const contentType = req.headers['content-type'] || '';
+    console.log(`🔍 [MIDDLEWARE] ==========================================`);
     console.log(`🔍 [MIDDLEWARE] Content-Type: ${contentType}`);
+    console.log(`🔍 [MIDDLEWARE] Method: ${req.method}`);
+    console.log(`🔍 [MIDDLEWARE] URL: ${req.url}`);
+    console.log(`🔍 [MIDDLEWARE] Headers:`, JSON.stringify(req.headers, null, 2));
+    console.log(`🔍 [MIDDLEWARE] Body before parsing:`, req.body);
+    console.log(`🔍 [MIDDLEWARE] ==========================================`);
     
     if (contentType.includes('multipart/form-data')) {
+        console.log(`📦 [MULTER] Detected multipart/form-data, using multer...`);
         // Use multer for FormData
         // Try .none() first (for FormData without files), if that fails, use .any()
         // .none() is specifically designed for FormData with only fields, no files
         upload.none()(req, res, (err) => {
             if (err) {
                 // If .none() fails (maybe there IS a file), try .any()
-                console.log('⚠️  [MULTER] .none() failed, trying .any()...');
+                console.log(`⚠️  [MULTER] .none() failed: ${err.message}`);
+                console.log(`⚠️  [MULTER] Error code: ${err.code}`);
+                console.log(`⚠️  [MULTER] Trying .any() instead...`);
                 return upload.any()(req, res, (err2) => {
                     if (err2) {
-                        console.error('❌ [MULTER ERROR]:', err2);
+                        console.error(`❌ [MULTER ERROR]:`, err2);
+                        console.error(`❌ [MULTER ERROR] Stack:`, err2.stack);
                         return res.status(400).json({ error: 'File upload error: ' + err2.message });
                     }
-                    console.log(`✅ [MULTER] Parsed FormData (with files):`, {
+                    console.log(`✅ [MULTER] Parsed FormData (with files using .any()):`, {
                         bodyKeys: Object.keys(req.body || {}),
                         bodyValues: req.body,
-                        filesCount: req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0
+                        bodyRaw: JSON.stringify(req.body),
+                        files: req.files,
+                        filesCount: req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0,
+                        filesDetails: req.files ? (Array.isArray(req.files) ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname, size: f.size })) : 'not array') : 'no files'
                     });
                     next();
                 });
             }
-            console.log(`✅ [MULTER] Parsed FormData (no files):`, {
+            console.log(`✅ [MULTER] Parsed FormData (no files using .none()):`, {
                 bodyKeys: Object.keys(req.body || {}),
                 bodyValues: req.body,
+                bodyRaw: JSON.stringify(req.body),
+                bodyType: typeof req.body,
+                bodyConstructor: req.body?.constructor?.name,
                 sessionId: req.body?.sessionId,
                 phone: req.body?.phone,
-                message: req.body?.message
+                message: req.body?.message,
+                // Log all body entries
+                bodyEntries: req.body ? Object.entries(req.body).map(([k, v]) => `${k}=${typeof v === 'string' ? v.substring(0, 50) : v}`).join(', ') : 'empty'
             });
             next();
         });
     } else {
         // Skip multer for JSON (no attachment) - express.json() will handle it
-        console.log(`✅ [MIDDLEWARE] Using JSON parser`);
+        console.log(`✅ [MIDDLEWARE] Using JSON parser (not multipart)`);
         next();
     }
 }, async (req, res) => {
@@ -677,15 +695,18 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         }
 
         if (!sessionId || !phone) {
-            console.error(`❌ [SEND MESSAGE] Missing required fields:`, {
-                sessionId: !!sessionId,
-                phone: !!phone,
-                body: req.body,
-                bodyKeys: Object.keys(req.body || {}),
-                contentType: req.headers['content-type'],
-                hasFiles: !!req.files,
-                filesCount: req.files?.length || 0
-            });
+            console.error(`❌ [SEND MESSAGE] ==========================================`);
+            console.error(`❌ [SEND MESSAGE] Missing required fields!`);
+            console.error(`❌ [SEND MESSAGE]   sessionId: ${sessionId} (exists: ${!!sessionId})`);
+            console.error(`❌ [SEND MESSAGE]   phone: ${phone} (exists: ${!!phone})`);
+            console.error(`❌ [SEND MESSAGE]   req.body:`, req.body);
+            console.error(`❌ [SEND MESSAGE]   req.body keys:`, Object.keys(req.body || {}));
+            console.error(`❌ [SEND MESSAGE]   req.body values:`, Object.entries(req.body || {}).map(([k, v]) => `${k}=${v}`).join(', '));
+            console.error(`❌ [SEND MESSAGE]   contentType: ${req.headers['content-type']}`);
+            console.error(`❌ [SEND MESSAGE]   hasFiles: ${!!req.files}`);
+            console.error(`❌ [SEND MESSAGE]   files:`, req.files);
+            console.error(`❌ [SEND MESSAGE]   req.rawBody:`, req.rawBody);
+            console.error(`❌ [SEND MESSAGE] ==========================================`);
             return res.status(400).json({ error: 'sessionId and phone are required' });
         }
 
