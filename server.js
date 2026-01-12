@@ -56,6 +56,7 @@ app.use((req, res, next) => {
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
         // Skip json/urlencoded parsing for multipart requests - let multer handle it
+        // But we need to ensure multer can parse fields even without files
         return next();
     }
     // For other requests, use json/urlencoded parsing
