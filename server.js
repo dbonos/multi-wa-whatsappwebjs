@@ -580,9 +580,11 @@ app.post('/api/messages/send', authenticate, upload.any(), async (req, res) => {
             message: message ? message.substring(0, 50) + '...' : null,
             hasCaption: !!caption,
             hasFile: !!file,
+            filesCount: req.files ? req.files.length : 0,
             bodyKeys: Object.keys(req.body || {}),
             contentType: req.headers['content-type'],
-            bodyRaw: JSON.stringify(req.body)
+            bodyRaw: JSON.stringify(req.body),
+            bodyValues: req.body ? Object.entries(req.body).map(([k, v]) => `${k}=${typeof v === 'string' ? v.substring(0, 20) : v}`).join(', ') : 'empty'
         });
 
         if (!sessionId || !phone) {
