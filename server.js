@@ -460,30 +460,40 @@ app.get('/api/sessions/:sessionId/qr', authenticate, async (req, res) => {
 app.delete('/api/sessions/:sessionId', authenticate, requireAdmin, async (req, res) => {
     try {
         const { sessionId } = req.params;
+        console.log(`🗑️  [DELETE SESSION] Starting deletion for session: ${sessionId}`);
+        
         const client = clients.get(sessionId);
 
         if (client) {
+            console.log(`🗑️  [DELETE SESSION] Destroying WhatsApp client for: ${sessionId}`);
             await client.destroy();
             clients.delete(sessionId);
+            console.log(`🗑️  [DELETE SESSION] Client destroyed and removed from memory: ${sessionId}`);
+        } else {
+            console.log(`🗑️  [DELETE SESSION] No active client found for: ${sessionId}`);
         }
 
         qrCodes.delete(sessionId);
         sessionStatuses.delete(sessionId);
+        console.log(`🗑️  [DELETE SESSION] Removed QR code and status from memory: ${sessionId}`);
 
         // Delete from database (cascade will delete related records)
-        await pool.execute('DELETE FROM sessions WHERE session_id = ?', [sessionId]);
+        const [result] = await pool.execute('DELETE FROM sessions WHERE session_id = ?', [sessionId]);
+        console.log(`🗑️  [DELETE SESSION] Deleted from database (affected rows: ${result.affectedRows}): ${sessionId}`);
 
         // Delete session folder
         const sessionAuthDir = path.join(process.cwd(), '.wwebjs_auth', `session-${sessionId}`);
         try {
             await fs.rm(sessionAuthDir, { recursive: true, force: true });
+            console.log(`🗑️  [DELETE SESSION] Deleted session folder: ${sessionAuthDir}`);
         } catch (err) {
-            console.log('Error deleting session folder:', err.message);
+            console.log(`⚠️  [DELETE SESSION] Error deleting session folder (may not exist): ${err.message}`);
         }
 
+        console.log(`✅ [DELETE SESSION] Session ${sessionId} deleted successfully`);
         res.json({ success: true, message: `Session ${sessionId} deleted successfully` });
     } catch (error) {
-        console.error('Error deleting session:', error);
+        console.error(`❌ [DELETE SESSION] Error deleting session ${req.params.sessionId}:`, error);
         res.status(500).json({ error: error.message });
     }
 });
