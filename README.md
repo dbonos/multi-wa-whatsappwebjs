@@ -239,3 +239,12 @@ curl -X POST http://localhost:3000/message/send \
 
 Service akan berjalan sebagai systemd service di server untuk auto-restart.
 
+### **Setelah Commit ke GitHub**
+
+**Quick Deploy (1 command):**
+```bash
+ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~/multi-wa-whatsappwebjs && ./scripts/deploy.sh"
+```
+
+**📖 [Lihat panduan lengkap →](docs/deployment/AFTER-COMMIT.md)**
+
