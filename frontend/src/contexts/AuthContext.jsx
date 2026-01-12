@@ -53,16 +53,38 @@ export const AuthProvider = ({ children }) => {
         loginPayload = loginData;
       }
 
+      console.log('📤 [AUTH] Sending login request:', {
+        hasUsername: !!loginPayload.username,
+        hasSessionName: !!loginPayload.sessionName,
+        hasPassword: !!loginPayload.password,
+        hasOtp: !!loginPayload.otp,
+        loginMethod: loginPayload.loginMethod
+      });
+
       const response = await authAPI.login(loginPayload);
       const { token: newToken, user: userData } = response.data;
+      
+      console.log('✅ [AUTH] Token received:', {
+        tokenLength: newToken?.length || 0,
+        tokenPreview: newToken ? `${newToken.substring(0, 30)}...` : 'NO TOKEN',
+        userId: userData?.id,
+        username: userData?.username,
+        role: userData?.role
+      });
       
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
       setToken(newToken);
       setUser(userData);
       
+      console.log('💾 [AUTH] Token saved to localStorage');
+      
       return { success: true };
     } catch (error) {
+      console.error('❌ [AUTH] Login error:', {
+        status: error.response?.status,
+        error: error.response?.data?.error || error.message
+      });
       return {
         success: false,
         error: error.response?.data?.error || 'Login failed',

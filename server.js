@@ -594,6 +594,11 @@ const upload = multer({
 // Send message (text or attachment)
 // Handle both JSON (no attachment) and FormData (with attachment)
 app.post('/api/messages/send', authenticate, (req, res, next) => {
+    console.log(`\n🚀🚀🚀 [SERVER] ==========================================`);
+    console.log(`🚀 [SERVER] POST /api/messages/send - REQUEST RECEIVED`);
+    console.log(`🚀 [SERVER] Timestamp: ${new Date().toISOString()}`);
+    console.log(`🚀 [SERVER] ==========================================\n`);
+    
     const contentType = req.headers['content-type'] || '';
     console.log(`🔍 [MIDDLEWARE] ==========================================`);
     console.log(`🔍 [MIDDLEWARE] Content-Type: ${contentType}`);
@@ -612,42 +617,33 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             if (err) {
                 // If .none() fails (maybe there IS a file), try .any()
                 console.log(`⚠️  [MULTER] .none() failed: ${err.message}`);
-                console.log(`⚠️  [MULTER] Error code: ${err.code}`);
                 console.log(`⚠️  [MULTER] Trying .any() instead...`);
                 return upload.any()(req, res, (err2) => {
                     if (err2) {
                         console.error(`❌ [MULTER ERROR]:`, err2);
-                        console.error(`❌ [MULTER ERROR] Stack:`, err2.stack);
                         return res.status(400).json({ error: 'File upload error: ' + err2.message });
                     }
-                    console.log(`✅ [MULTER] Parsed FormData (with files using .any()):`, {
+                    console.log(`✅ [MULTER] Parsed FormData (with files):`, {
                         bodyKeys: Object.keys(req.body || {}),
-                        bodyValues: req.body,
-                        bodyRaw: JSON.stringify(req.body),
-                        files: req.files,
-                        filesCount: req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0,
-                        filesDetails: req.files ? (Array.isArray(req.files) ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname, size: f.size })) : 'not array') : 'no files'
+                        sessionId: req.body?.sessionId,
+                        phone: req.body?.phone
                     });
                     next();
                 });
             }
-            console.log(`✅ [MULTER] Parsed FormData (no files using .none()):`, {
+            console.log(`✅ [MULTER] Parsed FormData (no files):`, {
                 bodyKeys: Object.keys(req.body || {}),
-                bodyValues: req.body,
-                bodyRaw: JSON.stringify(req.body),
-                bodyType: typeof req.body,
-                bodyConstructor: req.body?.constructor?.name,
                 sessionId: req.body?.sessionId,
-                phone: req.body?.phone,
-                message: req.body?.message,
-                // Log all body entries
-                bodyEntries: req.body ? Object.entries(req.body).map(([k, v]) => `${k}=${typeof v === 'string' ? v.substring(0, 50) : v}`).join(', ') : 'empty'
+                phone: req.body?.phone
             });
             next();
         });
     } else {
-        // Skip multer for JSON (no attachment) - express.json() will handle it
+        // For JSON requests, body should already be parsed by express.json()
+        // But let's verify it's there
         console.log(`✅ [MIDDLEWARE] Using JSON parser (not multipart)`);
+        console.log(`✅ [MIDDLEWARE] Body keys:`, Object.keys(req.body || {}));
+        console.log(`✅ [MIDDLEWARE] Body content:`, req.body);
         next();
     }
 }, async (req, res) => {
@@ -674,42 +670,29 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         console.log(`📤 [SEND MESSAGE]   message: ${message ? message.substring(0, 50) + '...' : 'null'} (type: ${typeof message})`);
         console.log(`📤 [SEND MESSAGE]   caption: ${caption || 'null'}`);
         console.log(`📤 [SEND MESSAGE]   hasFile: ${!!file}`);
-        console.log(`📤 [SEND MESSAGE]   file: ${file ? `${file.fieldname || 'unknown'}: ${file.originalname || 'unknown'} (${file.size} bytes)` : 'null'}`);
-        console.log(`📤 [SEND MESSAGE]   filesCount: ${req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0}`);
         console.log(`📤 [SEND MESSAGE]   bodyKeys: [${Object.keys(req.body || {}).join(', ')}]`);
-        console.log(`📤 [SEND MESSAGE]   bodyRaw: ${JSON.stringify(req.body)}`);
-        console.log(`📤 [SEND MESSAGE]   bodyEntries: ${req.body ? Object.entries(req.body).map(([k, v]) => `${k}=${typeof v === 'string' ? v.substring(0, 50) : v}`).join(', ') : 'empty'}`);
         console.log(`📤 [SEND MESSAGE]   contentType: ${req.headers['content-type']}`);
-        console.log(`📤 [SEND MESSAGE]   bodyType: ${typeof req.body}`);
-        console.log(`📤 [SEND MESSAGE]   bodyConstructor: ${req.body?.constructor?.name}`);
         console.log(`📤 [SEND MESSAGE] ==========================================`);
 
-        // Debug: Check if body is populated correctly
-        if (Object.keys(req.body || {}).length === 0 && !file) {
-            console.error(`❌ [SEND MESSAGE] Empty body detected:`, {
-                contentType: req.headers['content-type'],
-                hasFiles: !!req.files,
-                filesCount: req.files?.length || 0,
-                body: req.body,
-                method: req.method,
-                url: req.url
-            });
-        }
-
+        // Validate required fields with better error messages
         if (!sessionId || !phone) {
-            console.error(`❌ [SEND MESSAGE] ==========================================`);
-            console.error(`❌ [SEND MESSAGE] Missing required fields!`);
-            console.error(`❌ [SEND MESSAGE]   sessionId: ${sessionId} (exists: ${!!sessionId})`);
-            console.error(`❌ [SEND MESSAGE]   phone: ${phone} (exists: ${!!phone})`);
-            console.error(`❌ [SEND MESSAGE]   req.body:`, req.body);
-            console.error(`❌ [SEND MESSAGE]   req.body keys:`, Object.keys(req.body || {}));
-            console.error(`❌ [SEND MESSAGE]   req.body values:`, Object.entries(req.body || {}).map(([k, v]) => `${k}=${v}`).join(', '));
+            const missingFields = [];
+            if (!sessionId) missingFields.push('sessionId');
+            if (!phone) missingFields.push('phone');
+            
+            console.error(`❌ [SEND MESSAGE] Missing required fields: ${missingFields.join(', ')}`);
+            console.error(`❌ [SEND MESSAGE]   req.body:`, JSON.stringify(req.body, null, 2));
             console.error(`❌ [SEND MESSAGE]   contentType: ${req.headers['content-type']}`);
-            console.error(`❌ [SEND MESSAGE]   hasFiles: ${!!req.files}`);
-            console.error(`❌ [SEND MESSAGE]   files:`, req.files);
-            console.error(`❌ [SEND MESSAGE]   req.rawBody:`, req.rawBody);
-            console.error(`❌ [SEND MESSAGE] ==========================================`);
-            return res.status(400).json({ error: 'sessionId and phone are required' });
+            console.error(`❌ [SEND MESSAGE]   body keys:`, Object.keys(req.body || {}));
+            
+            return res.status(400).json({ 
+                error: `Missing required fields: ${missingFields.join(', ')}`,
+                received: {
+                    sessionId: sessionId || null,
+                    phone: phone || null,
+                    bodyKeys: Object.keys(req.body || {})
+                }
+            });
         }
 
         const client = clients.get(sessionId);
@@ -826,21 +809,33 @@ app.get('/api/messages', authenticate, async (req, res) => {
                 );
 
                 // Get reactions
-                const [reactions] = await pool.execute(
-                    `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
-                    FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
-                    [msg.message_id]
-                );
+                let reactions = [];
+                try {
+                    const [reactionsData] = await pool.execute(
+                        `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+                        FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+                        [msg.message_id]
+                    );
+                    reactions = reactionsData || [];
+                } catch (error) {
+                    console.warn('⚠️ [MESSAGES] Error fetching reactions (table may not exist):', error.message);
+                    reactions = [];
+                }
 
                 // Get reply info if exists
                 let replyToMessage = null;
                 if (msg.reply_to_message_id) {
-                    const [replies] = await pool.execute(
-                        `SELECT message_id, body, caption, message_type, from_number, timestamp
-                        FROM messages WHERE message_id = ?`,
-                        [msg.reply_to_message_id]
-                    );
-                    replyToMessage = replies[0] || null;
+                    try {
+                        const [replies] = await pool.execute(
+                            `SELECT message_id, body, caption, message_type, from_number, timestamp
+                            FROM messages WHERE message_id = ?`,
+                            [msg.reply_to_message_id]
+                        );
+                        replyToMessage = replies[0] || null;
+                    } catch (error) {
+                        console.warn('⚠️ [MESSAGES] Error fetching reply message:', error.message);
+                        replyToMessage = null;
+                    }
                 }
 
                 return {
@@ -879,11 +874,18 @@ app.get('/api/messages/:messageId/status', authenticate, async (req, res) => {
         );
 
         // Get reactions
-        const [reactions] = await pool.execute(
-            `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
-            FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
-            [messageId]
-        );
+        let reactions = [];
+        try {
+            const [reactionsData] = await pool.execute(
+                `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+                FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+                [messageId]
+            );
+            reactions = reactionsData || [];
+        } catch (error) {
+            console.warn('⚠️ [STATUS] Error fetching reactions (table may not exist):', error.message);
+            reactions = [];
+        }
 
         res.json({
             success: true,
@@ -901,15 +903,25 @@ app.get('/api/messages/:messageId/reactions', authenticate, async (req, res) => 
     try {
         const { messageId } = req.params;
 
-        const [reactions] = await pool.execute(
-            `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
-            FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
-            [messageId]
-        );
+        try {
+            const [reactions] = await pool.execute(
+                `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+                FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+                [messageId]
+            );
 
-        res.json({ success: true, reactions });
+            res.json({ success: true, reactions: reactions || [] });
+        } catch (dbError) {
+            // If table doesn't exist or query fails, return empty array
+            console.warn('⚠️ [REACTIONS] Error fetching reactions (table may not exist):', dbError.message);
+            res.json({ success: true, reactions: [] });
+        }
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('❌ [REACTIONS] Error in reactions endpoint:', error);
+        res.status(500).json({ 
+            error: error.message,
+            details: 'Failed to fetch message reactions. The message_reactions table may not exist.'
+        });
     }
 });
 
@@ -917,20 +929,37 @@ app.get('/api/messages/:messageId/reactions', authenticate, async (req, res) => 
 app.get('/api/messages/:messageId/replies', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
+        console.log(`📬 [REPLIES] Fetching replies for message: ${messageId}`);
 
-        const [replies] = await pool.execute(
-            `SELECT m.*, a.file_name, a.file_path, a.file_type
-            FROM message_replies mr
-            JOIN messages m ON m.message_id = mr.message_id
-            LEFT JOIN attachments a ON a.message_id = m.message_id
-            WHERE mr.reply_to_message_id = ?
-            ORDER BY m.timestamp DESC`,
-            [messageId]
-        );
+        // Check if message_replies table exists
+        try {
+            // Try to get replies
+            const [replies] = await pool.execute(
+                `SELECT m.*, a.file_name, a.file_path, a.file_type
+                FROM message_replies mr
+                JOIN messages m ON m.message_id = mr.message_id
+                LEFT JOIN attachments a ON a.message_id = m.message_id
+                WHERE mr.reply_to_message_id = ?
+                ORDER BY m.timestamp DESC`,
+                [messageId]
+            );
 
-        res.json({ success: true, replies });
+            console.log(`✅ [REPLIES] Found ${replies.length} replies`);
+            return res.json({ success: true, replies: replies || [] });
+        } catch (dbError) {
+            // If table doesn't exist or query fails, return empty array
+            console.warn('⚠️ [REPLIES] Error fetching replies (table may not exist):', dbError.message);
+            console.warn('⚠️ [REPLIES] Error code:', dbError.code);
+            console.warn('⚠️ [REPLIES] Error SQL state:', dbError.sqlState);
+            // Always return 200 with empty array instead of error
+            return res.json({ success: true, replies: [] });
+        }
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        // Catch any other errors and still return 200 with empty array
+        console.error('❌ [REPLIES] Error in replies endpoint:', error);
+        console.error('❌ [REPLIES] Error stack:', error.stack);
+        // Return 200 with empty array instead of 500 to prevent frontend errors
+        return res.json({ success: true, replies: [] });
     }
 });
 

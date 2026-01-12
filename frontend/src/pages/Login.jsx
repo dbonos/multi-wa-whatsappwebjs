@@ -52,13 +52,16 @@ export default function Login() {
         return;
       }
 
+      console.log('🔐 [LOGIN] Requesting token (Admin):', { username });
       setLoading(true);
       const result = await login({ username, password });
 
       if (result.success) {
+        console.log('✅ [LOGIN] Login successful (Admin)');
         toast.success('Login successful!');
         navigate('/dashboard');
       } else {
+        console.error('❌ [LOGIN] Login failed:', result.error);
         setError(result.error || 'Login failed');
         toast.error(result.error || 'Login failed');
       }
@@ -76,13 +79,16 @@ export default function Login() {
           return;
         }
 
+        console.log('🔐 [LOGIN] Requesting token (User - OTP):', { sessionName, otpLength: otp.length });
         setLoading(true);
         const result = await login({ sessionName, otp, loginMethod: 'otp' });
 
         if (result.success) {
+          console.log('✅ [LOGIN] Login successful (User - OTP)');
           toast.success('Login successful!');
           navigate('/dashboard');
         } else {
+          console.error('❌ [LOGIN] Login failed:', result.error);
           setError(result.error || 'Invalid OTP');
           toast.error(result.error || 'Invalid OTP');
         }
@@ -93,13 +99,16 @@ export default function Login() {
           return;
         }
 
+        console.log('🔐 [LOGIN] Requesting token (User - Password):', { sessionName });
         setLoading(true);
         const result = await login({ sessionName, password });
 
         if (result.success) {
+          console.log('✅ [LOGIN] Login successful (User - Password)');
           toast.success('Login successful!');
           navigate('/dashboard');
         } else {
+          console.error('❌ [LOGIN] Login failed:', result.error);
           setError(result.error || 'Login failed');
           toast.error(result.error || 'Login failed');
         }

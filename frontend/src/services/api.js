@@ -14,40 +14,108 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    
+    // Debug: log token status for all requests - FORCE LOG
+    console.log('%c🔐 [API] Request interceptor:', 'color: purple; font-weight: bold', {
+      url: config.url,
+      method: config.method,
+      hasToken: !!token,
+      tokenLength: token?.length || 0,
+      tokenPreview: token ? `${token.substring(0, 30)}...` : 'NO TOKEN',
+      timestamp: new Date().toISOString()
+    });
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ [API] Authorization header set:', `Bearer ${token.substring(0, 30)}...`);
+    } else {
+      console.warn('⚠️ [API] No token found in localStorage!');
+      // Don't block the request, let backend handle auth error
     }
+    
     // If data is FormData, remove Content-Type to let browser set it with boundary
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
       // Debug: log FormData contents
       console.log('📤 [API] Sending FormData:', {
+        url: config.url,
         hasSessionId: config.data.has('sessionId'),
         hasPhone: config.data.has('phone'),
         hasMessage: config.data.has('message'),
-        hasAttachment: config.data.has('attachment')
+        hasAttachment: config.data.has('attachment'),
+        headers: {
+          Authorization: config.headers.Authorization ? 'Bearer ***' : 'MISSING',
+          'Content-Type': config.headers['Content-Type'] || 'will be set by browser'
+        }
       });
-    } else {
-      // For JSON, ensure Content-Type is set
+    } else if (config.data && typeof config.data === 'object') {
+      // For JSON objects, ensure Content-Type is set
       config.headers['Content-Type'] = 'application/json';
-      console.log('📤 [API] Sending JSON:', config.data);
+      console.log('📤 [API] Sending JSON:', {
+        url: config.url,
+        data: config.data,
+        headers: {
+          Authorization: config.headers.Authorization ? 'Bearer ***' : 'MISSING',
+          'Content-Type': config.headers['Content-Type']
+        }
+      });
+      // Validate required fields before sending
+      if (config.url === '/messages/send') {
+        if (!config.data.sessionId || !config.data.phone) {
+          console.error('❌ [API] Missing required fields:', {
+            sessionId: config.data.sessionId,
+            phone: config.data.phone,
+            data: config.data
+          });
+        } else {
+          console.log('✅ [API] All required fields present');
+        }
+      }
     }
+    
     return config;
   },
   (error) => {
+    console.error('❌ [API] Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
 // Handle auth errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Log successful responses for messages endpoint
+    if (response.config?.url === '/messages/send') {
+      console.log('✅ [API] Message sent successfully:', {
+        status: response.status,
+        data: response.data
+      });
+    }
+    return response;
+  },
   (error) => {
+    console.error('❌ [API] Response error:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      headers: error.response?.headers
+    });
+    
     if (error.response?.status === 401) {
+      console.warn('⚠️ [API] Unauthorized (401) - redirecting to login');
+      console.warn('⚠️ [API] Clearing token from localStorage');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+    } else if (error.response?.status === 400) {
+      console.error('❌ [API] Bad Request (400):', error.response?.data);
+      if (error.config?.url === '/messages/send') {
+        console.error('❌ [API] Send message failed - check required fields');
+      }
     }
+    
     return Promise.reject(error);
   }
 );

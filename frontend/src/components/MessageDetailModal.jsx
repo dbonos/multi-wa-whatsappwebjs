@@ -44,7 +44,8 @@ export default function MessageDetailModal({ messageId, sessionId, onClose }) {
         const repliesResponse = await messagesAPI.getReplies(messageId);
         setReplies(repliesResponse.data.replies || []);
       } catch (err) {
-        // No replies
+        // Silently fail - replies table may not exist
+        console.warn('⚠️ [MESSAGE DETAIL] Could not load replies:', err.response?.status, err.response?.data?.error || err.message);
         setReplies([]);
       }
     } catch (error) {

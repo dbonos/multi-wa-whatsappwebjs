@@ -9,7 +9,14 @@ const authenticate = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
         
+        // Debug logging for messages endpoint
+        if (req.path === '/messages/send') {
+            console.log('🔐 [AUTH] Checking authentication for:', req.path);
+            console.log('🔐 [AUTH] Authorization header:', authHeader ? `${authHeader.substring(0, 20)}...` : 'MISSING');
+        }
+        
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            console.error('❌ [AUTH] No token provided');
             return res.status(401).json({ error: 'No token provided' });
         }
 
@@ -23,18 +30,31 @@ const authenticate = async (req, res, next) => {
         );
 
         if (users.length === 0) {
+            console.error('❌ [AUTH] User not found for userId:', decoded.userId);
             return res.status(401).json({ error: 'User not found' });
         }
 
         req.user = users[0];
+        
+        if (req.path === '/messages/send') {
+            console.log('✅ [AUTH] Authenticated user:', {
+                id: req.user.id,
+                username: req.user.username,
+                role: req.user.role
+            });
+        }
+        
         next();
     } catch (error) {
         if (error.name === 'JsonWebTokenError') {
+            console.error('❌ [AUTH] Invalid token:', error.message);
             return res.status(401).json({ error: 'Invalid token' });
         }
         if (error.name === 'TokenExpiredError') {
+            console.error('❌ [AUTH] Token expired');
             return res.status(401).json({ error: 'Token expired' });
         }
+        console.error('❌ [AUTH] Authentication error:', error);
         return res.status(500).json({ error: 'Authentication error' });
     }
 };

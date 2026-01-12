@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { useAuth } from '../contexts/AuthContext';
 import { messagesAPI, sessionsAPI } from '../services/api';
 import socketService from '../services/socket';
 import { Button } from '../components/ui/button';
@@ -37,6 +38,7 @@ const statusIcons = {
 };
 
 export default function Messages() {
+  const { isAuthenticated, token } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState('');
   const [messages, setMessages] = useState([]);
@@ -56,6 +58,14 @@ export default function Messages() {
   const pageSize = 20;
 
   useEffect(() => {
+    // Check authentication before loading
+    if (!isAuthenticated || !token) {
+      console.error('❌ [MESSAGES] Not authenticated or no token!');
+      toast.error('Please login first');
+      return;
+    }
+    
+    console.log('✅ [MESSAGES] Authenticated, token:', token ? `${token.substring(0, 20)}...` : 'MISSING');
     loadSessions();
     socketService.connect();
 
@@ -144,15 +154,24 @@ export default function Messages() {
   const loadSessions = async () => {
     try {
       const response = await sessionsAPI.list();
-      const readySessions = response.data.sessions.filter(
-        (s) => s.realtime_status === 'ready'
+      const sessionsList = response.data?.sessions || response.data || [];
+      const readySessions = sessionsList.filter(
+        (s) => s.realtime_status === 'ready' || s.status === 'ready'
       );
       setSessions(readySessions);
+      
+      // Auto-select first ready session if none selected
       if (readySessions.length > 0 && !selectedSession) {
-        setSelectedSession(readySessions[0].session_id);
+        const firstSessionId = readySessions[0].session_id;
+        console.log('✅ [FRONTEND] Auto-selecting session:', firstSessionId);
+        setSelectedSession(firstSessionId);
+      } else if (readySessions.length === 0) {
+        console.warn('⚠️ [FRONTEND] No ready sessions available');
+        setSelectedSession('');
       }
     } catch (error) {
       console.error('Failed to load sessions:', error);
+      toast.error('Failed to load sessions: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -212,11 +231,63 @@ export default function Messages() {
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!phone.trim() || (!message.trim() && !attachment)) return;
+    
+    // Force console log - make sure it appears
+    console.log('%c🚀 [SEND MESSAGE] ==========================================', 'color: blue; font-size: 14px; font-weight: bold');
+    console.log('🚀 [SEND MESSAGE] Starting send message process...');
+    console.log('🚀 [SEND MESSAGE] Form submitted at:', new Date().toISOString());
+    
+    // Check authentication first
+    const tokenFromStorage = localStorage.getItem('token');
+    console.log('🔐 [SEND MESSAGE] Token check:', {
+      isAuthenticated,
+      hasToken: !!token,
+      hasTokenFromStorage: !!tokenFromStorage,
+      tokenPreview: token ? `${token.substring(0, 30)}...` : 'MISSING',
+      tokenFromStoragePreview: tokenFromStorage ? `${tokenFromStorage.substring(0, 30)}...` : 'MISSING'
+    });
+    
+    if (!isAuthenticated || !token) {
+      toast.error('Please login first');
+      console.error('❌ [SEND MESSAGE] Cannot send: not authenticated');
+      console.error('❌ [SEND MESSAGE] isAuthenticated:', isAuthenticated);
+      console.error('❌ [SEND MESSAGE] token:', token ? 'EXISTS' : 'MISSING');
+      console.error('❌ [SEND MESSAGE] tokenFromStorage:', tokenFromStorage ? 'EXISTS' : 'MISSING');
+      return;
+    }
+    
+    console.log('✅ [SEND MESSAGE] Authentication check passed');
+    console.log('✅ [SEND MESSAGE] Token:', token ? `${token.substring(0, 30)}...` : 'MISSING');
+    
+    // Validate phone number
+    console.log('📱 [SEND MESSAGE] Phone validation:', { phone, trimmed: phone.trim(), isEmpty: !phone.trim() });
+    if (!phone.trim()) {
+      toast.error('Phone number is required');
+      console.error('❌ [SEND MESSAGE] Phone number is empty');
+      return;
+    }
+    
+    // Validate message or attachment
+    console.log('💬 [SEND MESSAGE] Message validation:', {
+      messageLength: message.trim().length,
+      hasAttachment: !!attachment,
+      attachmentName: attachment?.name
+    });
+    if (!message.trim() && !attachment) {
+      toast.error('Message or attachment is required');
+      console.error('❌ [SEND MESSAGE] Both message and attachment are empty');
+      return;
+    }
     
     // Validate session is selected
-    if (!selectedSession) {
+    console.log('📋 [SEND MESSAGE] Session validation:', {
+      selectedSession,
+      trimmed: selectedSession?.trim(),
+      isEmpty: !selectedSession || !selectedSession.trim()
+    });
+    if (!selectedSession || !selectedSession.trim()) {
       toast.error('Please select a session first');
+      console.error('❌ [SEND MESSAGE] Session not selected');
       return;
     }
 
@@ -224,36 +295,58 @@ export default function Messages() {
     try {
       // If no attachment, send as JSON (simpler and more reliable)
       // If attachment exists, use FormData
-      console.log('🔍 [FRONTEND] Preparing to send message:', {
+      const sessionIdToSend = selectedSession.trim();
+      const phoneToSend = phone.trim();
+      const messageToSend = message.trim();
+      
+      console.log('%c📋 [SEND MESSAGE] Message details:', 'color: green; font-weight: bold', {
+        sessionId: sessionIdToSend,
+        phone: phoneToSend,
+        messageLength: messageToSend.length,
+        messagePreview: messageToSend.substring(0, 50),
         hasAttachment: !!attachment,
         attachmentType: attachment?.type,
-        selectedSession,
-        phone: phone.trim(),
-        messageLength: message.trim().length
+        attachmentName: attachment?.name
       });
       
       // Explicitly check if attachment exists and is a valid File object
       const hasAttachment = attachment && attachment instanceof File;
       
       if (hasAttachment) {
-        console.log('📎 [FRONTEND] Using FormData (has attachment):', attachment.name);
+        console.log('📎 [SEND MESSAGE] Using FormData (has attachment)');
         const formData = new FormData();
-        formData.append('sessionId', selectedSession);
-        formData.append('phone', phone.trim());
-        if (message.trim()) formData.append('message', message.trim());
+        formData.append('sessionId', sessionIdToSend);
+        formData.append('phone', phoneToSend);
+        if (messageToSend) formData.append('message', messageToSend);
         formData.append('attachment', attachment);
-        await messagesAPI.send(formData);
+        
+        // Debug: verify FormData contents
+        console.log('%c📤 [SEND MESSAGE] FormData contents:', 'color: orange; font-weight: bold', {
+          hasSessionId: formData.has('sessionId'),
+          hasPhone: formData.has('phone'),
+          hasMessage: formData.has('message'),
+          hasAttachment: formData.has('attachment'),
+          sessionIdValue: sessionIdToSend,
+          phoneValue: phoneToSend
+        });
+        
+        console.log('📤 [SEND MESSAGE] Calling messagesAPI.send() with FormData...');
+        const response = await messagesAPI.send(formData);
+        console.log('✅ [SEND MESSAGE] API response received:', response);
       } else {
-        console.log('📝 [FRONTEND] Using JSON (no attachment)');
+        console.log('📝 [SEND MESSAGE] Using JSON (no attachment)');
         const jsonData = {
-          sessionId: selectedSession,
-          phone: phone.trim(),
-          message: message.trim()
+          sessionId: sessionIdToSend,
+          phone: phoneToSend,
+          message: messageToSend
         };
-        console.log('📤 [FRONTEND] Sending JSON data:', jsonData);
-        await messagesAPI.send(jsonData);
+        console.log('%c📤 [SEND MESSAGE] Sending JSON data:', 'color: orange; font-weight: bold', jsonData);
+        console.log('📤 [SEND MESSAGE] Calling messagesAPI.send() with JSON...');
+        const response = await messagesAPI.send(jsonData);
+        console.log('✅ [SEND MESSAGE] API response received:', response);
       }
       
+      console.log('✅ [SEND MESSAGE] Message sent successfully!');
       setPhone('');
       setMessage('');
       setAttachment(null);
@@ -261,9 +354,31 @@ export default function Messages() {
       await loadMessages(1); // Reload first page
       setCurrentPage(1);
     } catch (error) {
-      toast.error('Failed to send message: ' + (error.response?.data?.error || error.message));
+      const errorMsg = error.response?.data?.error || error.message;
+      const errorDetails = error.response?.data?.received || error.response?.data;
+      
+      console.error('%c❌ [SEND MESSAGE] Send message error:', 'color: red; font-weight: bold', error);
+      console.error('❌ [SEND MESSAGE] Error status:', error.response?.status);
+      console.error('❌ [SEND MESSAGE] Error response:', error.response?.data);
+      console.error('❌ [SEND MESSAGE] Error details:', errorDetails);
+      
+      // Show detailed error message
+      let errorMessage = 'Failed to send message: ' + errorMsg;
+      if (errorDetails && typeof errorDetails === 'object') {
+        const missingFields = [];
+        if (!errorDetails.sessionId) missingFields.push('sessionId');
+        if (!errorDetails.phone) missingFields.push('phone');
+        if (missingFields.length > 0) {
+          errorMessage += `\nMissing: ${missingFields.join(', ')}`;
+        }
+      }
+      
+      toast.error(errorMessage, { duration: 5000 });
+      alert(`Error: ${errorMessage}\n\nCheck console for details.`);
     } finally {
       setSending(false);
+      console.log('🏁 [SEND MESSAGE] Process completed');
+      console.log('🚀 [SEND MESSAGE] ==========================================');
     }
   };
 
