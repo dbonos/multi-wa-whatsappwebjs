@@ -760,21 +760,6 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             if (caption) media.caption = caption;
 
             sentMessage = await client.sendMessage(chatId, media);
-
-            // Save attachment to database
-            await pool.execute(
-                `INSERT INTO attachments (message_id, session_id, file_name, file_path, file_type, mime_type, file_size)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    sentMessage.id._serialized,
-                    sessionId,
-                    file.filename,
-                    file.path,
-                    file.mimetype.split('/')[0],
-                    file.mimetype,
-                    file.size
-                ]
-            );
         } else {
             // Send text message
             if (!message) {
@@ -783,7 +768,7 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             sentMessage = await client.sendMessage(chatId, message);
         }
 
-        // Save message to database
+        // Save message to database FIRST (before attachment to satisfy foreign key constraint)
         const [result] = await pool.execute(
             `INSERT INTO messages 
              (session_id, message_id, from_number, to_number, contact_id, direction, message_type, body, caption, status, timestamp, attachment_path)
@@ -801,6 +786,30 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 file ? file.path : null
             ]
         );
+
+        // Save attachment to database AFTER message is saved (to satisfy foreign key constraint)
+        if (file) {
+            try {
+                await pool.execute(
+                    `INSERT INTO attachments (message_id, session_id, file_name, file_path, file_type, mime_type, file_size)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        sentMessage.id._serialized,
+                        sessionId,
+                        file.filename,
+                        file.path,
+                        file.mimetype.split('/')[0],
+                        file.mimetype,
+                        file.size
+                    ]
+                );
+                console.log(`✅ [SEND MESSAGE] Attachment saved to database`);
+            } catch (attachmentError) {
+                console.error(`❌ [SEND MESSAGE] Error saving attachment:`, attachmentError);
+                // Don't fail the whole request if attachment save fails
+                // Message is already sent and saved
+            }
+        }
 
         // Save status history
         await pool.execute(
