@@ -33,19 +33,27 @@ VITE_API_URL=http://localhost:3000/api
 VITE_SOCKET_URL=http://localhost:3000
 ```
 
-**Setup database lokal:**
+**Setup database (pakai database server):**
 ```bash
-# Import schema
-mysql -u root -p < database/schema.sql
-mysql -u root -p wa_manager < database/migrations/add_reactions_replies_deleted.sql
+# Tidak perlu setup MySQL lokal!
+# Pakai database di server via SSH tunnel
+
+# 1. Start SSH tunnel (Terminal baru, biarkan running)
+./start-tunnel.sh
+
+# 2. Edit .env untuk connect ke database server
+nano .env
 ```
 
-**Edit `.env` untuk localhost:**
+**Isi `.env` untuk localhost dengan database server:**
 ```env
-DB_HOST=localhost
+DB_HOST=localhost  # Via SSH tunnel
 DB_USER=root
-DB_PASSWORD=your_local_mysql_password
+DB_PASSWORD=your_server_mysql_password  # Password MySQL di server
+DB_NAME=wa_manager
 ```
+
+**📖 Lihat [SETUP-DATABASE-SERVER.md](SETUP-DATABASE-SERVER.md) untuk detail lengkap!**
 
 **Start development:**
 ```bash
