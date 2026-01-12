@@ -405,6 +405,8 @@ app.post('/api/messages/send', authenticate, upload.single('attachment'), async 
 app.get('/api/messages', authenticate, async (req, res) => {
     try {
         const { sessionId, limit = 50, offset = 0 } = req.query;
+        const limitNum = parseInt(limit) || 50;
+        const offsetNum = parseInt(offset) || 0;
 
         let query = `
             SELECT m.*, a.file_name, a.file_path, a.file_type
@@ -419,8 +421,7 @@ app.get('/api/messages', authenticate, async (req, res) => {
             params.push(sessionId);
         }
 
-        query += ' ORDER BY m.timestamp DESC LIMIT ? OFFSET ?';
-        params.push(parseInt(limit) || 50, parseInt(offset) || 0);
+        query += ` ORDER BY m.timestamp DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
         const [messages] = await pool.execute(query, params);
 
