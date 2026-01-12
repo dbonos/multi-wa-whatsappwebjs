@@ -614,8 +614,13 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             console.log(`✅ [MULTER] Parsed FormData:`, {
                 bodyKeys: Object.keys(req.body || {}),
                 bodyValues: req.body,
+                bodyRaw: JSON.stringify(req.body),
                 files: req.files,
-                filesCount: req.files ? Object.keys(req.files).length : 0
+                filesCount: req.files ? Object.keys(req.files).length : 0,
+                // Debug: log each field individually
+                sessionId: req.body?.sessionId,
+                phone: req.body?.phone,
+                message: req.body?.message
             });
             next();
         });

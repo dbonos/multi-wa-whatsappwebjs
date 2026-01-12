@@ -20,6 +20,17 @@ api.interceptors.request.use(
     // If data is FormData, remove Content-Type to let browser set it with boundary
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
+      // Debug: log FormData contents
+      console.log('📤 [API] Sending FormData:', {
+        hasSessionId: config.data.has('sessionId'),
+        hasPhone: config.data.has('phone'),
+        hasMessage: config.data.has('message'),
+        hasAttachment: config.data.has('attachment')
+      });
+    } else {
+      // For JSON, ensure Content-Type is set
+      config.headers['Content-Type'] = 'application/json';
+      console.log('📤 [API] Sending JSON:', config.data);
     }
     return config;
   },
