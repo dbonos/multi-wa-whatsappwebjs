@@ -598,15 +598,11 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
     console.log(`🔍 [MIDDLEWARE] Content-Type: ${contentType}`);
     
     if (contentType.includes('multipart/form-data')) {
-        // Use multer for FormData (with or without attachment)
-        // Use fields() to explicitly define fields to parse (ensures fields are parsed even without files)
-        upload.fields([
-            { name: 'sessionId', maxCount: 1 },
-            { name: 'phone', maxCount: 1 },
-            { name: 'message', maxCount: 1 },
-            { name: 'caption', maxCount: 1 },
-            { name: 'attachment', maxCount: 1 }
-        ])(req, res, (err) => {
+        // Use multer for FormData
+        // Use .any() to handle both files and fields, or .none() if no files expected
+        // But we need to check if there's actually a file first
+        // For now, use .any() which should parse both fields and files
+        upload.any()(req, res, (err) => {
             if (err) {
                 console.error('❌ [MULTER ERROR]:', err);
                 return res.status(400).json({ error: 'File upload error: ' + err.message });
@@ -616,11 +612,14 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 bodyValues: req.body,
                 bodyRaw: JSON.stringify(req.body),
                 files: req.files,
-                filesCount: req.files ? Object.keys(req.files).length : 0,
+                filesCount: req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0,
                 // Debug: log each field individually
                 sessionId: req.body?.sessionId,
                 phone: req.body?.phone,
-                message: req.body?.message
+                message: req.body?.message,
+                // Check if body is populated
+                bodyType: typeof req.body,
+                bodyConstructor: req.body?.constructor?.name
             });
             next();
         });
@@ -633,19 +632,18 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
     try {
         // For FormData: multer populates req.body and req.files
         // For JSON: express.json() populates req.body
-        // Handle FormData fields (can be string or array when using fields())
+        // Handle FormData fields - multer.any() returns fields in req.body as strings
+        // Handle both string and array formats (for compatibility)
         const sessionId = Array.isArray(req.body?.sessionId) ? req.body.sessionId[0] : req.body?.sessionId;
         const phone = Array.isArray(req.body?.phone) ? req.body.phone[0] : req.body?.phone;
         const message = Array.isArray(req.body?.message) ? req.body.message[0] : req.body?.message;
         const caption = Array.isArray(req.body?.caption) ? req.body.caption[0] : req.body?.caption;
         
-        // Handle files from multer fields() - structure is { attachment: [file] }
+        // Handle files from multer.any() - returns array of files
         let file = null;
-        if (req.files && req.files.attachment) {
-            file = Array.isArray(req.files.attachment) ? req.files.attachment[0] : req.files.attachment;
-        } else if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-            // Fallback for upload.any() format
-            file = req.files[0];
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+            // Find attachment file (fieldname === 'attachment')
+            file = req.files.find(f => f.fieldname === 'attachment') || req.files[0];
         }
 
         console.log(`📤 [SEND MESSAGE] Request received:`, {
