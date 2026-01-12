@@ -667,20 +667,22 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             file = req.files.find(f => f.fieldname === 'attachment') || req.files[0];
         }
 
-        console.log(`📤 [SEND MESSAGE] Request received:`, {
-            sessionId,
-            phone,
-            message: message ? message.substring(0, 50) + '...' : null,
-            hasCaption: !!caption,
-            hasFile: !!file,
-            filesCount: req.files ? req.files.length : 0,
-            bodyKeys: Object.keys(req.body || {}),
-            contentType: req.headers['content-type'],
-            bodyRaw: JSON.stringify(req.body),
-            bodyValues: req.body ? Object.entries(req.body).map(([k, v]) => `${k}=${typeof v === 'string' ? v.substring(0, 20) : v}`).join(', ') : 'empty',
-            bodyType: typeof req.body,
-            bodyConstructor: req.body?.constructor?.name
-        });
+        console.log(`📤 [SEND MESSAGE] ==========================================`);
+        console.log(`📤 [SEND MESSAGE] Request received:`);
+        console.log(`📤 [SEND MESSAGE]   sessionId: ${sessionId} (type: ${typeof sessionId}, exists: ${!!sessionId})`);
+        console.log(`📤 [SEND MESSAGE]   phone: ${phone} (type: ${typeof phone}, exists: ${!!phone})`);
+        console.log(`📤 [SEND MESSAGE]   message: ${message ? message.substring(0, 50) + '...' : 'null'} (type: ${typeof message})`);
+        console.log(`📤 [SEND MESSAGE]   caption: ${caption || 'null'}`);
+        console.log(`📤 [SEND MESSAGE]   hasFile: ${!!file}`);
+        console.log(`📤 [SEND MESSAGE]   file: ${file ? `${file.fieldname || 'unknown'}: ${file.originalname || 'unknown'} (${file.size} bytes)` : 'null'}`);
+        console.log(`📤 [SEND MESSAGE]   filesCount: ${req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0}`);
+        console.log(`📤 [SEND MESSAGE]   bodyKeys: [${Object.keys(req.body || {}).join(', ')}]`);
+        console.log(`📤 [SEND MESSAGE]   bodyRaw: ${JSON.stringify(req.body)}`);
+        console.log(`📤 [SEND MESSAGE]   bodyEntries: ${req.body ? Object.entries(req.body).map(([k, v]) => `${k}=${typeof v === 'string' ? v.substring(0, 50) : v}`).join(', ') : 'empty'}`);
+        console.log(`📤 [SEND MESSAGE]   contentType: ${req.headers['content-type']}`);
+        console.log(`📤 [SEND MESSAGE]   bodyType: ${typeof req.body}`);
+        console.log(`📤 [SEND MESSAGE]   bodyConstructor: ${req.body?.constructor?.name}`);
+        console.log(`📤 [SEND MESSAGE] ==========================================`);
 
         // Debug: Check if body is populated correctly
         if (Object.keys(req.body || {}).length === 0 && !file) {
