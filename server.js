@@ -51,7 +51,7 @@ app.use(helmet({
 }));
 app.use(cors());
 // IMPORTANT: express.json() and express.urlencoded() should NOT parse multipart/form-data
-// But they might interfere. We'll use a conditional middleware that skips multipart requests
+// They automatically skip multipart requests, but to be safe, we'll use conditional middleware
 app.use((req, res, next) => {
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
@@ -568,11 +568,12 @@ const upload = multer({
 app.post('/api/messages/send', authenticate, upload.single('attachment'), async (req, res) => {
     try {
         // Multer should populate req.body with form fields
+        // With upload.any(), files are in req.files array
         const sessionId = req.body?.sessionId;
         const phone = req.body?.phone;
         const message = req.body?.message;
         const caption = req.body?.caption;
-        const file = req.file;
+        const file = req.files && req.files.length > 0 ? req.files[0] : null;
 
         console.log(`📤 [SEND MESSAGE] Request received:`, {
             sessionId,
