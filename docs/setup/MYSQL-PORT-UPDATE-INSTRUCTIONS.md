@@ -12,7 +12,7 @@
 
 ```bash
 # Run update script
-./update-mysql-port.sh
+./scripts/update-mysql-port.sh
 ```
 
 Script akan otomatis:
@@ -176,5 +176,5 @@ sudo netstat -tulpn | grep 5508
 - ⏳ `.env` di server perlu diupdate
 - ⏳ Application service perlu di-restart
 
-**Run script:** `./update-mysql-port.sh` untuk otomatis update semua!
+**Run script:** `./scripts/update-mysql-port.sh` untuk otomatis update semua!
 
