@@ -555,18 +555,26 @@ const upload = multer({
 });
 
 // Send message (text or attachment)
+// IMPORTANT: This route must be defined BEFORE express.json() middleware
+// But since we already have express.json() globally, multer will handle multipart/form-data
 app.post('/api/messages/send', authenticate, upload.single('attachment'), async (req, res) => {
     try {
-        const { sessionId, phone, message, caption } = req.body;
+        // Multer should populate req.body with form fields
+        const sessionId = req.body?.sessionId;
+        const phone = req.body?.phone;
+        const message = req.body?.message;
+        const caption = req.body?.caption;
         const file = req.file;
 
         console.log(`📤 [SEND MESSAGE] Request received:`, {
             sessionId,
             phone,
-            hasMessage: !!message,
+            message: message ? message.substring(0, 50) + '...' : null,
             hasCaption: !!caption,
             hasFile: !!file,
-            bodyKeys: Object.keys(req.body)
+            bodyKeys: Object.keys(req.body || {}),
+            contentType: req.headers['content-type'],
+            bodyRaw: JSON.stringify(req.body)
         });
 
         if (!sessionId || !phone) {
