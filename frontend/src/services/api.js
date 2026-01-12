@@ -83,8 +83,7 @@ export const sessionsAPI = {
 // Messages API
 export const messagesAPI = {
   send: (data) => {
-    // If data is already FormData, use it directly
-    // Don't set Content-Type header - let browser set it with boundary
+    // If data is already FormData, use it directly (for attachments)
     if (data instanceof FormData) {
       return api.post('/messages/send', data, {
         headers: {
@@ -92,16 +91,10 @@ export const messagesAPI = {
         },
       });
     }
-    // Otherwise, create FormData from object
-    const formData = new FormData();
-    Object.keys(data).forEach(key => {
-      if (data[key] !== null && data[key] !== undefined) {
-        formData.append(key, data[key]);
-      }
-    });
-    return api.post('/messages/send', formData, {
+    // Otherwise, send as JSON (for text-only messages)
+    return api.post('/messages/send', data, {
       headers: {
-        // Remove Content-Type to let browser set it automatically with boundary
+        'Content-Type': 'application/json',
       },
     });
   },
