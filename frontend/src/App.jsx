@@ -10,6 +10,7 @@ import Messages from './pages/Messages';
 import Broadcast from './pages/Broadcast';
 import Status from './pages/Status';
 import Contacts from './pages/Contacts';
+import ChangePassword from './pages/ChangePassword';
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
@@ -66,6 +67,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <Contacts />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <ChangePassword />
             </Layout>
           </ProtectedRoute>
         }

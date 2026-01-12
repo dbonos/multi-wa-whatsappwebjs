@@ -13,12 +13,13 @@ import {
   Sun,
   Moon,
   User,
+  Key,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from './ui/button';
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -29,13 +30,14 @@ export default function Layout({ children }) {
     navigate('/login');
   };
 
+  // Admin can see all, User can only see their own session
   const navItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/messages', icon: MessageSquare, label: 'Messages' },
-    { path: '/contacts', icon: User, label: 'Contacts' },
-    { path: '/broadcast', icon: Radio, label: 'Broadcast' },
-    { path: '/status', icon: Image, label: 'Status & Stories' },
-  ];
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false },
+    { path: '/messages', icon: MessageSquare, label: 'Messages', adminOnly: false },
+    { path: '/contacts', icon: User, label: 'Contacts', adminOnly: false },
+    { path: '/broadcast', icon: Radio, label: 'Broadcast', adminOnly: true },
+    { path: '/status', icon: Image, label: 'Status & Stories', adminOnly: true },
+  ].filter(item => isAdmin || !item.adminOnly);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -104,6 +106,14 @@ export default function Layout({ children }) {
                   </p>
                 </div>
               </div>
+              <Link
+                to="/change-password"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Key className="w-5 h-5" />
+                <span className="font-medium">Change Password</span>
+              </Link>
               <Button
                 variant="ghost"
                 className="w-full justify-start"
