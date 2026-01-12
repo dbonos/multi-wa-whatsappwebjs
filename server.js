@@ -691,11 +691,27 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         const message = req.body?.message;
         const caption = req.body?.caption;
         
-        // Handle files from multer.any() - returns array of files
+        // Handle files - multer.fields() returns object, multer.any() returns array
         let file = null;
-        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-            // Find attachment file (fieldname === 'attachment')
-            file = req.files.find(f => f.fieldname === 'attachment') || req.files[0];
+        if (req.files) {
+            if (Array.isArray(req.files)) {
+                // From multer.any() - array of files
+                file = req.files.find(f => f.fieldname === 'attachment') || req.files[0];
+            } else if (typeof req.files === 'object') {
+                // From multer.fields() - object with field names as keys
+                if (req.files.attachment && Array.isArray(req.files.attachment) && req.files.attachment.length > 0) {
+                    file = req.files.attachment[0];
+                } else {
+                    // Find first file in any field
+                    const fileFields = Object.keys(req.files);
+                    for (const fieldName of fileFields) {
+                        if (Array.isArray(req.files[fieldName]) && req.files[fieldName].length > 0) {
+                            file = req.files[fieldName][0];
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         console.log(`📤 [SEND MESSAGE] ==========================================`);
