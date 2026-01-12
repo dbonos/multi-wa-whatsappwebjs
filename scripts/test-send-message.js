@@ -28,12 +28,13 @@ async function testSendMessage() {
             headers: { Authorization: `Bearer ${token}` }
         });
         
-        const sessions = Array.isArray(sessionsResponse.data) 
-            ? sessionsResponse.data 
-            : [];
+        // Handle both { success: true, sessions: [...] } and direct array
+        const sessions = sessionsResponse.data.success 
+            ? (sessionsResponse.data.sessions || [])
+            : (Array.isArray(sessionsResponse.data) ? sessionsResponse.data : []);
         
         const readySession = sessions.find(s => 
-            s.status === 'ready' || s.status === 'authenticated'
+            (s.status === 'ready' || s.status === 'authenticated' || s.realtime_status === 'ready' || s.realtime_status === 'authenticated')
         );
         
         if (!readySession) {
