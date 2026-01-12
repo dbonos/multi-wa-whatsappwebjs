@@ -568,17 +568,26 @@ const upload = multer({
 // Handle both JSON (no attachment) and FormData (with attachment)
 app.post('/api/messages/send', authenticate, (req, res, next) => {
     const contentType = req.headers['content-type'] || '';
+    console.log(`🔍 [MIDDLEWARE] Content-Type: ${contentType}`);
+    
     if (contentType.includes('multipart/form-data')) {
         // Use multer for FormData (with or without attachment)
+        // upload.any() handles both files and fields
         upload.any()(req, res, (err) => {
             if (err) {
                 console.error('❌ [MULTER ERROR]:', err);
                 return res.status(400).json({ error: 'File upload error: ' + err.message });
             }
+            console.log(`✅ [MULTER] Parsed FormData:`, {
+                bodyKeys: Object.keys(req.body || {}),
+                bodyValues: req.body,
+                filesCount: req.files?.length || 0
+            });
             next();
         });
     } else {
         // Skip multer for JSON (no attachment) - express.json() will handle it
+        console.log(`✅ [MIDDLEWARE] Using JSON parser`);
         next();
     }
 }, async (req, res) => {
