@@ -113,7 +113,7 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
       socketService.off('session_status', handleStatus);
       socketService.leaveSession(sessionId);
     };
-  }, [sessionId, status, onReady, qrExpiresAt]);
+  }, [sessionId, status, onReady]); // Removed qrExpiresAt from deps to avoid infinite loop
 
   return (
     <AnimatePresence>
