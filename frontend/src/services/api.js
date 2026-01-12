@@ -39,8 +39,24 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  login: (username, password) =>
-    api.post('/auth/login', { username, password }),
+  // Admin login: username + password
+  // User login: sessionName + password or sessionName + otp
+  login: (data) => {
+    // Support both old format (username, password) and new format (object)
+    if (typeof data === 'string') {
+      // Legacy: username, password as separate params
+      const [username, password] = arguments;
+      return api.post('/auth/login', { username, password });
+    }
+    // New format: { username?, sessionName?, password?, otp?, loginMethod? }
+    return api.post('/auth/login', data);
+  },
+  
+  requestOTP: (sessionName) =>
+    api.post('/auth/request-otp', { sessionName }),
+  
+  changePassword: (currentPassword, newPassword) =>
+    api.post('/auth/change-password', { currentPassword, newPassword }),
   
   getMe: () => api.get('/auth/me'),
 };

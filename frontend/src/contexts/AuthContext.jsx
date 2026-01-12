@@ -40,9 +40,20 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (loginData) => {
     try {
-      const response = await authAPI.login(username, password);
+      // Support both old format (username, password) and new format (object)
+      let loginPayload;
+      if (typeof loginData === 'string') {
+        // Legacy format: username, password
+        const [username, password] = arguments;
+        loginPayload = { username, password };
+      } else {
+        // New format: { username?, sessionName?, password?, otp?, loginMethod? }
+        loginPayload = loginData;
+      }
+
+      const response = await authAPI.login(loginPayload);
       const { token: newToken, user: userData } = response.data;
       
       localStorage.setItem('token', newToken);
@@ -55,6 +66,30 @@ export const AuthProvider = ({ children }) => {
       return {
         success: false,
         error: error.response?.data?.error || 'Login failed',
+      };
+    }
+  };
+
+  const requestOTP = async (sessionName) => {
+    try {
+      const response = await authAPI.requestOTP(sessionName);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to request OTP',
+      };
+    }
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      await authAPI.changePassword(currentPassword, newPassword);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to change password',
       };
     }
   };
@@ -72,7 +107,10 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
+    requestOTP,
+    changePassword,
     isAuthenticated: !!token,
+    isAdmin: user?.role === 'admin',
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
