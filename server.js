@@ -1678,9 +1678,11 @@ app.get('*', (req, res, next) => {
 async function initializeExistingSessions() {
     try {
         console.log('🔄 [AUTO-INIT] Checking for existing sessions to initialize...');
+        // Initialize sessions that have been authenticated before (not stopped/disconnected)
         const [sessions] = await pool.execute(
             `SELECT session_id, status FROM sessions 
-             WHERE status IN ('ready', 'authenticated') 
+             WHERE status IN ('ready', 'authenticated', 'initializing', 'qr_generated')
+             AND status != 'stopped'
              ORDER BY updated_at DESC`
         );
 
