@@ -307,9 +307,9 @@ ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem \
 
 ## 📚 **Related Documentation**
 
-- **[WORKFLOW.md](WORKFLOW.md)** - Development workflow
-- **[SETUP-SERVER.md](SETUP-SERVER.md)** - Server setup
-- **[SETUP-LOCALHOST.md](SETUP-LOCALHOST.md)** - Localhost setup
+- **[WORKFLOW.md](../deployment/WORKFLOW.md)** - Development workflow
+- **[SETUP-SERVER.md](SETUP-SERVER.md)** - Server setup (same folder)
+- **[SETUP-LOCALHOST.md](SETUP-LOCALHOST.md)** - Localhost setup (same folder)
 
 ---
 

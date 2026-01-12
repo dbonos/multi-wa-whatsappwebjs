@@ -214,9 +214,9 @@ sudo systemctl restart mysql
 
 ## 📚 **Related Documentation**
 
-- **[SETUP-DATABASE-SERVER.md](SETUP-DATABASE-SERVER.md)** - Setup database untuk development
-- **[WORKFLOW.md](WORKFLOW.md)** - Development workflow
-- **[SETUP-SERVER.md](SETUP-SERVER.md)** - Server setup
+- **[SETUP-DATABASE-SERVER.md](SETUP-DATABASE-SERVER.md)** - Setup database untuk development (same folder)
+- **[WORKFLOW.md](../deployment/WORKFLOW.md)** - Development workflow
+- **[SETUP-SERVER.md](SETUP-SERVER.md)** - Server setup (same folder)
 
 ---
 

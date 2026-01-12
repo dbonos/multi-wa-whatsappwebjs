@@ -421,7 +421,7 @@ sudo chown -R ubuntu:ubuntu ~/wa-web/.wwebjs_auth/
 
 - [CAPABILITIES.md](CAPABILITIES.md) - All features (same folder)
 - [PUPPETEER.md](PUPPETEER.md) - Browser automation details
-- [SERVER-CONFIG.md](SERVER-CONFIG.md) - Server setup
+- [SERVER-CONFIG.md](../deployment/SERVER-CONFIG.md) - Server setup
 - [DEPLOYMENT.md](../deployment/DEPLOYMENT.md) - Deployment guide
 
 ---

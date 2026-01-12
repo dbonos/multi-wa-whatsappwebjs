@@ -53,7 +53,7 @@ DB_PASSWORD=your_server_mysql_password  # Password MySQL di server
 DB_NAME=wa_manager
 ```
 
-**📖 Lihat [SETUP-DATABASE-SERVER.md](SETUP-DATABASE-SERVER.md) untuk detail lengkap!**
+**📖 Lihat [SETUP-DATABASE-SERVER.md](../setup/SETUP-DATABASE-SERVER.md) untuk detail lengkap!**
 
 **Start development:**
 ```bash
@@ -425,10 +425,10 @@ ssh -i ~/.ssh/LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~
 
 ## 📚 **Related Documentation**
 
-- **[SETUP-LOCALHOST.md](SETUP-LOCALHOST.md)** - Setup untuk localhost
-- **[SETUP-SERVER.md](SETUP-SERVER.md)** - Setup untuk server
+- **[SETUP-LOCALHOST.md](../setup/SETUP-LOCALHOST.md)** - Setup untuk localhost
+- **[SETUP-SERVER.md](../setup/SETUP-SERVER.md)** - Setup untuk server
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment guide (same folder)
-- **[deploy.sh](../scripts/deploy.sh)** - Deployment script
+- **[deploy.sh](../../scripts/deploy.sh)** - Deployment script
 
 ---
 
