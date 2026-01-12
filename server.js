@@ -1708,10 +1708,16 @@ async function initializeExistingSessions() {
                 sessionStatuses.set(session_id, 'initializing');
 
                 // Initialize client (will auto-login if session file exists)
+                // Add delay to avoid multiple simultaneous initializations
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
                 client.initialize().then(() => {
                     console.log(`✅ [AUTO-INIT] Client initialization started for: ${session_id}`);
                 }).catch(err => {
                     console.error(`❌ [AUTO-INIT] Error initializing session ${session_id}:`, err.message);
+                    // Clean up failed client
+                    clients.delete(session_id);
+                    sessionStatuses.delete(session_id);
                 });
             } catch (err) {
                 console.log(`⚠️  [AUTO-INIT] Session file not found for ${session_id}, skipping...`);
