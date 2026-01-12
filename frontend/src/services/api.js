@@ -79,6 +79,13 @@ export const sessionsAPI = {
 // Messages API
 export const messagesAPI = {
   send: (data) => {
+    // If data is already FormData, use it directly
+    if (data instanceof FormData) {
+      return api.post('/messages/send', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    }
+    // Otherwise, create FormData from object
     const formData = new FormData();
     Object.keys(data).forEach(key => {
       if (data[key] !== null && data[key] !== undefined) {
