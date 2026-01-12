@@ -1449,7 +1449,14 @@ function createClient(sessionId) {
                 '--no-first-run',
                 '--no-zygote',
                 '--single-process',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--disable-features=TranslateUI',
+                '--disable-ipc-flooding-protection',
+                '--memory-pressure-off', // Reduce memory pressure
+                '--max_old_space_size=512' // Limit Node.js memory to 512MB
             ]
         }
     });
