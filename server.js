@@ -63,16 +63,6 @@ app.use('/api/', limiter);
 // Serve static files (frontend)
 app.use(express.static('public'));
 
-// SPA fallback - serve index.html for all non-API routes
-app.get('*', (req, res, next) => {
-    // Skip API routes
-    if (req.path.startsWith('/api/')) {
-        return next();
-    }
-    // Serve index.html for all other routes (SPA routing)
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
 // ============================================
 // AUTHENTICATION ENDPOINTS
 // ============================================
