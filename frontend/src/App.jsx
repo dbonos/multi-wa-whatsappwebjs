@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Messages from './pages/Messages';
 import Broadcast from './pages/Broadcast';
 import Status from './pages/Status';
+import Contacts from './pages/Contacts';
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
@@ -55,6 +56,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <Status />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/contacts"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Contacts />
             </Layout>
           </ProtectedRoute>
         }

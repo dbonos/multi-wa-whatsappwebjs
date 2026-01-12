@@ -148,5 +148,12 @@ export const webhooksAPI = {
   delete: (id) => api.delete(`/webhooks/${id}`),
 };
 
+// Contacts API
+export const contactsAPI = {
+  list: (params = {}) => api.get('/contacts', { params }),
+  
+  get: (contactId, sessionId) => api.get(`/contacts/${contactId}`, { params: { sessionId } }),
+};
+
 export default api;
 

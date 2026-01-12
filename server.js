@@ -892,6 +892,138 @@ app.get('/api/broadcast/:broadcastMessageId/status', authenticate, async (req, r
 });
 
 // ============================================
+// CONTACTS ENDPOINTS
+// ============================================
+
+// Get all contacts from database
+app.get('/api/contacts', authenticate, async (req, res) => {
+    try {
+        const { sessionId, limit = 100, offset = 0, search } = req.query;
+        const limitNum = parseInt(limit) || 100;
+        const offsetNum = parseInt(offset) || 0;
+
+        let query = `
+            SELECT c.*, 
+            COUNT(DISTINCT m.id) as message_count
+            FROM contacts c
+            LEFT JOIN messages m ON m.contact_id = c.contact_id AND m.session_id = c.session_id
+        `;
+        const params = [];
+
+        if (sessionId) {
+            query += ' WHERE c.session_id = ?';
+            params.push(sessionId);
+        } else {
+            query += ' WHERE 1=1';
+        }
+
+        if (search) {
+            query += ` AND (
+                c.name LIKE ? OR 
+                c.pushname LIKE ? OR 
+                c.phone_number LIKE ? OR 
+                c.contact_id LIKE ?
+            )`;
+            const searchTerm = `%${search}%`;
+            params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+        }
+
+        query += ` GROUP BY c.id ORDER BY c.name ASC, c.pushname ASC LIMIT ${limitNum} OFFSET ${offsetNum}`;
+
+        const [contacts] = await pool.execute(query, params);
+
+        // Get total count
+        let countQuery = 'SELECT COUNT(DISTINCT c.id) as total FROM contacts c';
+        const countParams = [];
+        if (sessionId) {
+            countQuery += ' WHERE c.session_id = ?';
+            countParams.push(sessionId);
+        }
+        if (search) {
+            countQuery += sessionId ? ' AND' : ' WHERE';
+            countQuery += ` (
+                c.name LIKE ? OR 
+                c.pushname LIKE ? OR 
+                c.phone_number LIKE ? OR 
+                c.contact_id LIKE ?
+            )`;
+            const searchTerm = `%${search}%`;
+            countParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
+        }
+        const [countResult] = await pool.execute(countQuery, countParams);
+        const total = countResult[0]?.total || 0;
+
+        // Get statistics
+        let statsQuery = `
+            SELECT 
+                COUNT(DISTINCT c.id) as total,
+                COUNT(DISTINCT CASE WHEN c.phone_number IS NOT NULL THEN c.id END) as with_phone,
+                COUNT(DISTINCT CASE WHEN c.phone_number IS NULL THEN c.id END) as without_phone,
+                COUNT(DISTINCT CASE WHEN c.is_group = TRUE THEN c.id END) as groups,
+                COUNT(DISTINCT CASE WHEN c.is_business = TRUE THEN c.id END) as business
+            FROM contacts c
+        `;
+        const statsParams = [];
+        if (sessionId) {
+            statsQuery += ' WHERE c.session_id = ?';
+            statsParams.push(sessionId);
+        }
+        const [stats] = await pool.execute(statsQuery, statsParams);
+
+        res.json({
+            success: true,
+            contacts,
+            total,
+            stats: stats[0] || {}
+        });
+    } catch (error) {
+        console.error('Error getting contacts:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get contact details with messages
+app.get('/api/contacts/:contactId', authenticate, async (req, res) => {
+    try {
+        const { contactId } = req.params;
+        const { sessionId } = req.query;
+
+        let query = 'SELECT * FROM contacts WHERE contact_id = ?';
+        const params = [contactId];
+
+        if (sessionId) {
+            query += ' AND session_id = ?';
+            params.push(sessionId);
+        }
+
+        const [contacts] = await pool.execute(query, params);
+
+        if (contacts.length === 0) {
+            return res.status(404).json({ error: 'Contact not found' });
+        }
+
+        const contact = contacts[0];
+
+        // Get messages for this contact
+        const [messages] = await pool.execute(
+            `SELECT * FROM messages 
+            WHERE contact_id = ? AND session_id = ?
+            ORDER BY timestamp DESC LIMIT 50`,
+            [contactId, contact.session_id]
+        );
+
+        res.json({
+            success: true,
+            contact,
+            messages: messages || []
+        });
+    } catch (error) {
+        console.error('Error getting contact details:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // WEBHOOK ENDPOINTS
 // ============================================
 

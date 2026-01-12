@@ -12,6 +12,7 @@ import {
   Settings,
   Sun,
   Moon,
+  User,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from './ui/button';
@@ -31,6 +32,7 @@ export default function Layout({ children }) {
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/messages', icon: MessageSquare, label: 'Messages' },
+    { path: '/contacts', icon: User, label: 'Contacts' },
     { path: '/broadcast', icon: Radio, label: 'Broadcast' },
     { path: '/status', icon: Image, label: 'Status & Stories' },
   ];
