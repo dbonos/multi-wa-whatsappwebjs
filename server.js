@@ -14,8 +14,9 @@ const rateLimit = require('express-rate-limit');
 // Import services and middleware
 const pool = require('./src/config/database');
 const messageHandler = require('./src/services/messageHandler');
-const { authenticate, requireAdmin, generateToken } = require('./src/middleware/auth');
+const { authenticate, requireAdmin, requireUser, requireSessionOwner, generateToken } = require('./src/middleware/auth');
 const SocketHandler = require('./src/services/socketHandler');
+const otpService = require('./src/services/otpService');
 
 const app = express();
 const server = http.createServer(app);
@@ -49,45 +50,239 @@ app.use(express.static('public'));
 // AUTHENTICATION ENDPOINTS
 // ============================================
 
-// Login
+// Login - Support both admin (username/password) and user (session name + password/OTP)
 app.post('/api/auth/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, sessionName, password, otp, loginMethod } = req.body;
 
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Username and password required' });
-        }
+        // Admin login: username + password
+        if (username && password && !sessionName) {
+            const [users] = await pool.execute(
+                'SELECT * FROM users WHERE username = ? AND role = ?',
+                [username, 'admin']
+            );
 
-        const [users] = await pool.execute(
-            'SELECT * FROM users WHERE username = ?',
-            [username]
-        );
-
-        if (users.length === 0) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const user = users[0];
-        const validPassword = await bcrypt.compare(password, user.password_hash);
-
-        if (!validPassword) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const token = generateToken(user.id);
-
-        res.json({
-            success: true,
-            token,
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role
+            if (users.length === 0) {
+                return res.status(401).json({ error: 'Invalid credentials' });
             }
-        });
+
+            const user = users[0];
+            const validPassword = await bcrypt.compare(password, user.password_hash);
+
+            if (!validPassword) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            const token = generateToken(user.id);
+
+            return res.json({
+                success: true,
+                token,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    role: user.role
+                }
+            });
+        }
+
+        // User login: session name (phone number) + password or OTP
+        if (sessionName && (password || otp)) {
+            // Check if session exists
+            const [sessions] = await pool.execute(
+                'SELECT * FROM sessions WHERE session_id = ?',
+                [sessionName]
+            );
+
+            if (sessions.length === 0) {
+                return res.status(404).json({ error: 'Session not found' });
+            }
+
+            // Find or create user for this session
+            let [users] = await pool.execute(
+                'SELECT * FROM users WHERE session_id = ? OR phone_number = ?',
+                [sessionName, sessionName]
+            );
+
+            let user;
+            if (users.length === 0) {
+                // Create user if doesn't exist
+                const defaultPassword = await bcrypt.hash('changeme', 10);
+                await pool.execute(
+                    `INSERT INTO users (username, session_id, phone_number, password_hash, role) 
+                     VALUES (?, ?, ?, ?, 'user')`,
+                    [sessionName, sessionName, sessionName, defaultPassword]
+                );
+
+                [users] = await pool.execute(
+                    'SELECT * FROM users WHERE session_id = ?',
+                    [sessionName]
+                );
+            }
+
+            user = users[0];
+
+            // Login with password
+            if (password && loginMethod !== 'otp') {
+                const validPassword = await bcrypt.compare(password, user.password_hash);
+
+                if (!validPassword) {
+                    return res.status(401).json({ error: 'Invalid password' });
+                }
+
+                const token = generateToken(user.id);
+
+                return res.json({
+                    success: true,
+                    token,
+                    user: {
+                        id: user.id,
+                        username: user.username || user.session_id,
+                        session_id: user.session_id,
+                        phone_number: user.phone_number,
+                        role: user.role
+                    }
+                });
+            }
+
+            // Login with OTP
+            if (otp && loginMethod === 'otp') {
+                const otpResult = await otpService.verifyOTP(sessionName, otp);
+
+                if (!otpResult.success) {
+                    return res.status(401).json({ error: otpResult.error || 'Invalid OTP' });
+                }
+
+                const token = generateToken(user.id);
+
+                return res.json({
+                    success: true,
+                    token,
+                    user: {
+                        id: user.id,
+                        username: user.username || user.session_id,
+                        session_id: user.session_id,
+                        phone_number: user.phone_number,
+                        role: user.role
+                    }
+                });
+            }
+
+            return res.status(400).json({ error: 'Password or OTP required' });
+        }
+
+        return res.status(400).json({ error: 'Invalid login parameters' });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Login failed' });
+    }
+});
+
+// Request OTP for user login
+app.post('/api/auth/request-otp', async (req, res) => {
+    try {
+        const { sessionName } = req.body;
+
+        if (!sessionName) {
+            return res.status(400).json({ error: 'Session name (phone number) required' });
+        }
+
+        // Check if session exists
+        const [sessions] = await pool.execute(
+            'SELECT * FROM sessions WHERE session_id = ?',
+            [sessionName]
+        );
+
+        if (sessions.length === 0) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        const ipAddress = req.ip || req.connection.remoteAddress;
+        const userAgent = req.headers['user-agent'];
+
+        const result = await otpService.requestOTP(sessionName, sessionName, ipAddress, userAgent);
+
+        if (!result.success) {
+            return res.status(400).json({ error: result.error });
+        }
+
+        // Send OTP via WhatsApp if client is ready
+        const client = clients.get(sessionName);
+        if (client && client.info) {
+            try {
+                // Get OTP code from database
+                const [users] = await pool.execute(
+                    'SELECT otp_code FROM users WHERE session_id = ?',
+                    [sessionName]
+                );
+
+                if (users.length > 0 && users[0].otp_code) {
+                    const otpMessage = `Your login OTP code is: ${users[0].otp_code}\n\nThis code will expire in 10 minutes.`;
+                    await client.sendMessage(`${sessionName}@c.us`, otpMessage);
+                }
+            } catch (error) {
+                console.error('Error sending OTP via WhatsApp:', error);
+                // Continue anyway, OTP is still generated
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'OTP sent successfully',
+            expiresIn: result.expiresIn
+        });
+    } catch (error) {
+        console.error('Request OTP error:', error);
+        res.status(500).json({ error: 'Failed to request OTP' });
+    }
+});
+
+// Change password (for both admin and user)
+app.post('/api/auth/change-password', authenticate, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Current password and new password required' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'New password must be at least 6 characters' });
+        }
+
+        // Get user with password hash
+        const [users] = await pool.execute(
+            'SELECT * FROM users WHERE id = ?',
+            [req.user.id]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const user = users[0];
+        const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
+
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Current password is incorrect' });
+        }
+
+        // Hash new password
+        const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+        // Update password
+        await pool.execute(
+            'UPDATE users SET password_hash = ? WHERE id = ?',
+            [newPasswordHash, user.id]
+        );
+
+        res.json({
+            success: true,
+            message: 'Password changed successfully'
+        });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ error: 'Failed to change password' });
     }
 });
 
@@ -103,19 +298,29 @@ app.get('/api/auth/me', authenticate, async (req, res) => {
 // SESSION MANAGEMENT ENDPOINTS
 // ============================================
 
-// Get all sessions
+// Get all sessions (Admin: all sessions, User: only their session)
 app.get('/api/sessions', authenticate, async (req, res) => {
     try {
-        const [sessions] = await pool.execute(
-            `SELECT s.*, 
+        let query = `SELECT s.*, 
              COUNT(DISTINCT m.id) as message_count,
              COUNT(DISTINCT c.id) as contact_count
              FROM sessions s
              LEFT JOIN messages m ON m.session_id = s.session_id
-             LEFT JOIN contacts c ON c.session_id = s.session_id
-             GROUP BY s.id
-             ORDER BY s.created_at DESC`
-        );
+             LEFT JOIN contacts c ON c.session_id = s.session_id`;
+
+        // User can only see their own session
+        if (req.user.role !== 'admin') {
+            query += ` WHERE s.session_id = ?`;
+        }
+
+        query += ` GROUP BY s.id ORDER BY s.created_at DESC`;
+
+        let sessions;
+        if (req.user.role === 'admin') {
+            [sessions] = await pool.execute(query);
+        } else {
+            [sessions] = await pool.execute(query, [req.user.session_id]);
+        }
 
         // Add real-time status from memory
         const sessionsWithStatus = sessions.map(s => ({
@@ -131,8 +336,8 @@ app.get('/api/sessions', authenticate, async (req, res) => {
     }
 });
 
-// Create new session
-app.post('/api/sessions', authenticate, async (req, res) => {
+// Create new session (Admin only)
+app.post('/api/sessions', authenticate, requireAdmin, async (req, res) => {
     try {
         const { sessionId } = req.body;
 
@@ -179,8 +384,8 @@ app.post('/api/sessions', authenticate, async (req, res) => {
     }
 });
 
-// Get session details
-app.get('/api/sessions/:sessionId', authenticate, async (req, res) => {
+// Get session details (Admin: any session, User: only their session)
+app.get('/api/sessions/:sessionId', authenticate, requireSessionOwner, async (req, res) => {
     try {
         const { sessionId } = req.params;
 
@@ -234,8 +439,8 @@ app.get('/api/sessions/:sessionId/qr', authenticate, async (req, res) => {
     }
 });
 
-// Delete session
-app.delete('/api/sessions/:sessionId', authenticate, async (req, res) => {
+// Delete session (Admin only)
+app.delete('/api/sessions/:sessionId', authenticate, requireAdmin, async (req, res) => {
     try {
         const { sessionId } = req.params;
         const client = clients.get(sessionId);

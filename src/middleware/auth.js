@@ -16,9 +16,9 @@ const authenticate = async (req, res, next) => {
         const token = authHeader.substring(7);
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        // Get user from database
+        // Get user from database (include session_id for users)
         const [users] = await pool.execute(
-            'SELECT id, username, role FROM users WHERE id = ?',
+            'SELECT id, username, role, session_id, phone_number FROM users WHERE id = ?',
             [decoded.userId]
         );
 
@@ -47,6 +47,52 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
+// User only middleware (not admin)
+const requireUser = (req, res, next) => {
+    if (req.user.role === 'admin') {
+        return res.status(403).json({ error: 'User access only' });
+    }
+    next();
+};
+
+// Check if user owns the session
+const requireSessionOwner = async (req, res, next) => {
+    try {
+        const sessionId = req.params.sessionId || req.body.sessionId;
+        
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Session ID required' });
+        }
+
+        // Admin can access all sessions
+        if (req.user.role === 'admin') {
+            return next();
+        }
+
+        // Get full user info including session_id
+        const [users] = await pool.execute(
+            'SELECT session_id FROM users WHERE id = ?',
+            [req.user.id]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const userSessionId = users[0].session_id;
+
+        // User can only access their own session
+        if (userSessionId !== sessionId) {
+            return res.status(403).json({ error: 'Access denied to this session' });
+        }
+
+        next();
+    } catch (error) {
+        console.error('requireSessionOwner error:', error);
+        return res.status(500).json({ error: 'Authorization error' });
+    }
+};
+
 // Generate JWT token
 const generateToken = (userId) => {
     return jwt.sign(
@@ -59,6 +105,8 @@ const generateToken = (userId) => {
 module.exports = {
     authenticate,
     requireAdmin,
+    requireUser,
+    requireSessionOwner,
     generateToken
 };
 
