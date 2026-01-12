@@ -28,13 +28,17 @@ async function testSendMessage() {
             headers: { Authorization: `Bearer ${token}` }
         });
         
-        const readySession = sessionsResponse.data.find(s => 
+        const sessions = Array.isArray(sessionsResponse.data) 
+            ? sessionsResponse.data 
+            : [];
+        
+        const readySession = sessions.find(s => 
             s.status === 'ready' || s.status === 'authenticated'
         );
         
         if (!readySession) {
             console.error('❌ No ready session found');
-            console.log('Available sessions:', sessionsResponse.data.map(s => ({
+            console.log('Available sessions:', sessions.map(s => ({
                 session_id: s.session_id,
                 status: s.status
             })));
