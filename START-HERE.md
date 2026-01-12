@@ -1,5 +1,16 @@
 # 🚀 START HERE - Panduan Lengkap Setup
 
+## ⚠️ **PENTING: Pilih Setup Anda**
+
+**Setup ini bisa untuk LOCALHOST atau SERVER, tapi konfigurasinya berbeda!**
+
+- 💻 **LOCALHOST** → Development di komputer lokal → Baca **[SETUP-LOCALHOST.md](SETUP-LOCALHOST.md)**
+- 🖥️ **SERVER** → Production di server → Baca **[SETUP-SERVER.md](SETUP-SERVER.md)**
+
+**Saat ini file `.env` sudah dibuat untuk SERVER (IP: 108.137.37.171)**
+
+---
+
 ## ✅ **Status Setup Saat Ini**
 
 Semua file konfigurasi sudah dibuat! Anda tinggal:
