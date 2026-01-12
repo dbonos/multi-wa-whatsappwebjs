@@ -43,6 +43,7 @@ app.use(helmet({
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             frameSrc: ["'none'"],
+            upgradeInsecureRequests: null, // Disable upgrade to HTTPS (we're using HTTP)
         },
     },
     crossOriginOpenerPolicy: false, // Disable COOP for HTTP
