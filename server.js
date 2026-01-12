@@ -636,12 +636,11 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
     try {
         // For FormData: multer populates req.body and req.files
         // For JSON: express.json() populates req.body
-        // Handle FormData fields - multer.any() returns fields in req.body as strings
-        // Handle both string and array formats (for compatibility)
-        const sessionId = Array.isArray(req.body?.sessionId) ? req.body.sessionId[0] : req.body?.sessionId;
-        const phone = Array.isArray(req.body?.phone) ? req.body.phone[0] : req.body?.phone;
-        const message = Array.isArray(req.body?.message) ? req.body.message[0] : req.body?.message;
-        const caption = Array.isArray(req.body?.caption) ? req.body.caption[0] : req.body?.caption;
+        // multer.none() and multer.any() both return fields as strings in req.body
+        const sessionId = req.body?.sessionId;
+        const phone = req.body?.phone;
+        const message = req.body?.message;
+        const caption = req.body?.caption;
         
         // Handle files from multer.any() - returns array of files
         let file = null;
