@@ -456,8 +456,34 @@ app.get('/api/sessions/:sessionId/qr', authenticate, async (req, res) => {
         const qrCode = qrCodes.get(sessionId);
 
         if (!qrCode) {
-            return res.status(404).json({ error: 'QR code not available. Session may be authenticated or not initialized.' });
+            // Check database for QR code and expiration
+            const [sessions] = await pool.execute(
+                'SELECT qr_code, qr_expires_at FROM sessions WHERE session_id = ?',
+                [sessionId]
+            );
+            
+            if (sessions.length === 0 || !sessions[0].qr_code) {
+                return res.status(404).json({ error: 'QR code not available. Session may be authenticated or not initialized.' });
+            }
+            
+            // Return QR from database
+            const session = sessions[0];
+            return res.json({
+                success: true,
+                qrCode: session.qr_code,
+                qrExpiresAt: session.qr_expires_at ? new Date(session.qr_expires_at).toISOString() : null
+            });
         }
+
+        // Get expiration from database
+        const [sessions] = await pool.execute(
+            'SELECT qr_expires_at FROM sessions WHERE session_id = ?',
+            [sessionId]
+        );
+        
+        const expiresAt = sessions.length > 0 && sessions[0].qr_expires_at 
+            ? new Date(sessions[0].qr_expires_at).toISOString()
+            : new Date(Date.now() + 20000).toISOString();
 
         // Generate QR code image
         const qrImage = await qrcode.toDataURL(qrCode);
@@ -466,7 +492,7 @@ app.get('/api/sessions/:sessionId/qr', authenticate, async (req, res) => {
             success: true,
             qrCode: qrCode,
             qrImage: qrImage,
-            expiresAt: new Date(Date.now() + 20000).toISOString() // 20 seconds
+            qrExpiresAt: expiresAt
         });
     } catch (error) {
         res.status(500).json({ error: error.message });

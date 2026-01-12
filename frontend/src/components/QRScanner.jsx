@@ -9,6 +9,8 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
   const [qrCode, setQrCode] = useState(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
+  const [qrExpiresAt, setQrExpiresAt] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(null);
 
   useEffect(() => {
     socketService.connect();
@@ -19,6 +21,10 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
       if (data.sessionId === sessionId) {
         setQrCode(data.qrCode);
         setStatus('qr_ready');
+        // Set expiration time (20 seconds from now)
+        if (data.qrCode) {
+          setQrExpiresAt(Date.now() + 20000);
+        }
       }
     };
 
@@ -33,7 +39,10 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
             onClose?.();
           }, 2000);
         } else if (data.status === 'qr_generated') {
-          setQrCode(data.qrCode);
+          if (data.qrCode) {
+            setQrCode(data.qrCode);
+            setQrExpiresAt(Date.now() + 20000);
+          }
           setStatus('qr_ready');
         }
       }
@@ -49,6 +58,17 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
         if (response.data.qrCode) {
           setQrCode(response.data.qrCode);
           setStatus('qr_ready');
+          // Set expiration time from server or default to 20 seconds
+          if (response.data.qrExpiresAt) {
+            const expiresTime = new Date(response.data.qrExpiresAt).getTime();
+            setQrExpiresAt(expiresTime);
+            // Calculate initial time remaining
+            const remaining = Math.max(0, Math.ceil((expiresTime - Date.now()) / 1000));
+            setTimeRemaining(remaining);
+          } else {
+            setQrExpiresAt(Date.now() + 20000);
+            setTimeRemaining(20);
+          }
         } else {
           setStatus('authenticated');
         }
@@ -64,20 +84,36 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
 
     fetchQR();
 
-    // Poll for QR code updates
-    const interval = setInterval(() => {
+    // Countdown timer for QR expiration
+    const countdownInterval = setInterval(() => {
+      if (qrExpiresAt && status === 'qr_ready') {
+        const remaining = Math.max(0, Math.ceil((qrExpiresAt - Date.now()) / 1000));
+        setTimeRemaining(remaining);
+        
+        // Auto-refresh QR if expired
+        if (remaining === 0) {
+          console.log('🔄 QR code expired, fetching new one...');
+          setStatus('loading');
+          fetchQR();
+        }
+      }
+    }, 1000);
+
+    // Poll for QR code updates (fallback)
+    const pollInterval = setInterval(() => {
       if (status === 'waiting' || status === 'loading') {
         fetchQR();
       }
     }, 5000);
 
     return () => {
-      clearInterval(interval);
+      clearInterval(countdownInterval);
+      clearInterval(pollInterval);
       socketService.off('qr_code', handleQRCode);
       socketService.off('session_status', handleStatus);
       socketService.leaveSession(sessionId);
     };
-  }, [sessionId, status, onReady]);
+  }, [sessionId, status, onReady, qrExpiresAt]);
 
   return (
     <AnimatePresence>
@@ -221,9 +257,25 @@ export default function QRScanner({ sessionId, onClose, onReady }) {
                 </div>
               </div>
 
-              <p className="text-xs text-gray-500 text-center">
-                QR code refreshes automatically every 20 seconds
-              </p>
+              <div className="space-y-2">
+                {timeRemaining !== null && timeRemaining > 0 ? (
+                  <div className="flex items-center justify-center gap-2 text-xs">
+                    <div className={`w-2 h-2 rounded-full ${timeRemaining <= 5 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
+                    <p className="text-gray-600">
+                      QR code refreshes in <span className="font-semibold text-gray-900">{timeRemaining}s</span>
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 text-center">
+                    QR code refreshes automatically every 20 seconds
+                  </p>
+                )}
+                {status === 'loading' && qrCode && (
+                  <p className="text-xs text-blue-600 text-center animate-pulse">
+                    Refreshing QR code...
+                  </p>
+                )}
+              </div>
             </div>
             </motion.div>
           )}
