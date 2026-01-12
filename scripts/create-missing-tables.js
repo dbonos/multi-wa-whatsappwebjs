@@ -50,26 +50,84 @@ async function createMissingTables() {
             console.log('✅ message_status_history table already exists');
         }
         
-        // Check other tables that might be missing
-        const requiredTables = [
-            'message_reactions',
-            'message_replies',
-            'deleted_messages_log'
-        ];
+        // Check and create message_reactions table
+        const [reactionsCheck] = await pool.execute(`
+            SELECT COUNT(*) as count 
+            FROM information_schema.tables 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'message_reactions'
+        `);
         
-        for (const tableName of requiredTables) {
-            const [check] = await pool.execute(`
-                SELECT COUNT(*) as count 
-                FROM information_schema.tables 
-                WHERE table_schema = DATABASE() 
-                AND table_name = ?
-            `, [tableName]);
-            
-            if (check[0].count === 0) {
-                console.log(`⚠️  Table ${tableName} is missing (optional, will be created if needed)`);
-            } else {
-                console.log(`✅ Table ${tableName} exists`);
-            }
+        if (reactionsCheck[0].count === 0) {
+            console.log('📝 Creating message_reactions table...');
+            await pool.execute(`
+                CREATE TABLE IF NOT EXISTS message_reactions (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    message_id VARCHAR(255) NOT NULL,
+                    from_number VARCHAR(20) NOT NULL,
+                    reaction_emoji VARCHAR(10),
+                    reaction_text VARCHAR(255),
+                    timestamp BIGINT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_message_id (message_id),
+                    INDEX idx_from_number (from_number),
+                    UNIQUE KEY unique_reaction (message_id, from_number, reaction_emoji)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+            `);
+            console.log('✅ message_reactions table created!');
+        } else {
+            console.log('✅ message_reactions table already exists');
+        }
+        
+        // Check and create message_replies table (if needed)
+        const [repliesCheck] = await pool.execute(`
+            SELECT COUNT(*) as count 
+            FROM information_schema.tables 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'message_replies'
+        `);
+        
+        if (repliesCheck[0].count === 0) {
+            console.log('📝 Creating message_replies table...');
+            await pool.execute(`
+                CREATE TABLE IF NOT EXISTS message_replies (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    message_id VARCHAR(255) NOT NULL,
+                    reply_to_message_id VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_message_id (message_id),
+                    INDEX idx_reply_to (reply_to_message_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+            `);
+            console.log('✅ message_replies table created!');
+        } else {
+            console.log('✅ message_replies table already exists');
+        }
+        
+        // Check and create deleted_messages_log table (if needed)
+        const [deletedCheck] = await pool.execute(`
+            SELECT COUNT(*) as count 
+            FROM information_schema.tables 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'deleted_messages_log'
+        `);
+        
+        if (deletedCheck[0].count === 0) {
+            console.log('📝 Creating deleted_messages_log table...');
+            await pool.execute(`
+                CREATE TABLE IF NOT EXISTS deleted_messages_log (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    message_id VARCHAR(255) NOT NULL,
+                    session_id VARCHAR(100) NOT NULL,
+                    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    deleted_by VARCHAR(20),
+                    INDEX idx_message_id (message_id),
+                    INDEX idx_session_id (session_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+            `);
+            console.log('✅ deleted_messages_log table created!');
+        } else {
+            console.log('✅ deleted_messages_log table already exists');
         }
         
         console.log('✅ All checks completed!');
