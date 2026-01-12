@@ -559,7 +559,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+    // Ensure multer parses fields even without files
+    preservePath: true
 });
 
 // Send message (text or attachment)
@@ -567,8 +569,14 @@ const upload = multer({
 app.post('/api/messages/send', authenticate, (req, res, next) => {
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
-        // Use multer for FormData (with attachment)
-        upload.any()(req, res, next);
+        // Use multer for FormData (with or without attachment)
+        upload.any()(req, res, (err) => {
+            if (err) {
+                console.error('❌ [MULTER ERROR]:', err);
+                return res.status(400).json({ error: 'File upload error: ' + err.message });
+            }
+            next();
+        });
     } else {
         // Skip multer for JSON (no attachment) - express.json() will handle it
         next();
@@ -593,14 +601,32 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             bodyKeys: Object.keys(req.body || {}),
             contentType: req.headers['content-type'],
             bodyRaw: JSON.stringify(req.body),
-            bodyValues: req.body ? Object.entries(req.body).map(([k, v]) => `${k}=${typeof v === 'string' ? v.substring(0, 20) : v}`).join(', ') : 'empty'
+            bodyValues: req.body ? Object.entries(req.body).map(([k, v]) => `${k}=${typeof v === 'string' ? v.substring(0, 20) : v}`).join(', ') : 'empty',
+            bodyType: typeof req.body,
+            bodyConstructor: req.body?.constructor?.name
         });
+
+        // Debug: Check if body is populated correctly
+        if (Object.keys(req.body || {}).length === 0 && !file) {
+            console.error(`❌ [SEND MESSAGE] Empty body detected:`, {
+                contentType: req.headers['content-type'],
+                hasFiles: !!req.files,
+                filesCount: req.files?.length || 0,
+                body: req.body,
+                method: req.method,
+                url: req.url
+            });
+        }
 
         if (!sessionId || !phone) {
             console.error(`❌ [SEND MESSAGE] Missing required fields:`, {
                 sessionId: !!sessionId,
                 phone: !!phone,
-                body: req.body
+                body: req.body,
+                bodyKeys: Object.keys(req.body || {}),
+                contentType: req.headers['content-type'],
+                hasFiles: !!req.files,
+                filesCount: req.files?.length || 0
             });
             return res.status(400).json({ error: 'sessionId and phone are required' });
         }
