@@ -2,6 +2,12 @@
 
 Multi-instance WhatsApp Web API menggunakan whatsapp-web.js dengan **advanced @lid handling**
 
+## 🚀 **QUICK START**
+
+**Baru pertama kali setup?** Baca **[START-HERE.md](START-HERE.md)** untuk panduan lengkap!
+
+**Sudah setup?** Langsung ke [Installation](#installation) atau [Usage](#usage)
+
 ## 🌟 Key Features
 - ✅ Multiple WhatsApp sessions/instances
 - ✅ REST API untuk management
