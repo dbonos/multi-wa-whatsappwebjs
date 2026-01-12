@@ -216,13 +216,24 @@ export default function Messages() {
 
     setSending(true);
     try {
-      const formData = new FormData();
-      formData.append('sessionId', selectedSession);
-      formData.append('phone', phone);
-      if (message.trim()) formData.append('message', message);
-      if (attachment) formData.append('attachment', attachment);
-
-      await messagesAPI.send(formData);
+      // If no attachment, send as JSON (simpler and more reliable)
+      // If attachment exists, use FormData
+      if (attachment) {
+        const formData = new FormData();
+        formData.append('sessionId', selectedSession);
+        formData.append('phone', phone);
+        if (message.trim()) formData.append('message', message);
+        formData.append('attachment', attachment);
+        await messagesAPI.send(formData);
+      } else {
+        // Send as JSON when no attachment
+        await messagesAPI.send({
+          sessionId: selectedSession,
+          phone: phone,
+          message: message.trim()
+        });
+      }
+      
       setPhone('');
       setMessage('');
       setAttachment(null);
