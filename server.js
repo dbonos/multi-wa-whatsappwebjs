@@ -420,7 +420,7 @@ app.get('/api/messages', authenticate, async (req, res) => {
         }
 
         query += ' ORDER BY m.timestamp DESC LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), parseInt(offset));
+        params.push(parseInt(limit) || 50, parseInt(offset) || 0);
 
         const [messages] = await pool.execute(query, params);
 
