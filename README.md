@@ -24,9 +24,11 @@ WhatsApp menggunakan 2 tipe identifier:
 ## 📚 Documentation
 
 - **[🚀 CAPABILITIES.md](CAPABILITIES.md)** - Complete guide: Apa saja yang bisa dilakukan dengan whatsapp-web.js
+- **[📱 CONNECT-NEW-NUMBER.md](CONNECT-NEW-NUMBER.md)** - **NEW!** How to connect new WhatsApp numbers (step-by-step)
 - **[🤖 PUPPETEER.md](PUPPETEER.md)** - Puppeteer architecture, optimization & troubleshooting
 - **[📊 LID-HANDLING.md](LID-HANDLING.md)** - Advanced @lid handling & phone extraction
 - **[🔧 DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment workflow & service management
+- **[🖥️ SERVER-CONFIG.md](SERVER-CONFIG.md)** - Server configuration & SSH access
 - **[📋 SUMMARY.md](SUMMARY.md)** - Executive summary & comparison
 
 ## Installation
