@@ -563,11 +563,20 @@ const upload = multer({
 });
 
 // Send message (text or attachment)
-// Use upload.any() to handle both file and non-file FormData
-app.post('/api/messages/send', authenticate, upload.any(), async (req, res) => {
+// Handle both JSON (no attachment) and FormData (with attachment)
+app.post('/api/messages/send', authenticate, (req, res, next) => {
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+        // Use multer for FormData (with attachment)
+        upload.any()(req, res, next);
+    } else {
+        // Skip multer for JSON (no attachment) - express.json() will handle it
+        next();
+    }
+}, async (req, res) => {
     try {
-        // Multer should populate req.body with form fields
-        // With upload.any(), files are in req.files array
+        // For FormData: multer populates req.body and req.files
+        // For JSON: express.json() populates req.body
         const sessionId = req.body?.sessionId;
         const phone = req.body?.phone;
         const message = req.body?.message;
