@@ -1674,7 +1674,53 @@ app.get('*', (req, res, next) => {
 // START SERVER
 // ============================================
 
-server.listen(PORT, () => {
+// Auto-initialize existing sessions on server start
+async function initializeExistingSessions() {
+    try {
+        console.log('🔄 [AUTO-INIT] Checking for existing sessions to initialize...');
+        const [sessions] = await pool.execute(
+            `SELECT session_id, status FROM sessions 
+             WHERE status IN ('ready', 'authenticated') 
+             ORDER BY updated_at DESC`
+        );
+
+        if (sessions.length === 0) {
+            console.log('✅ [AUTO-INIT] No existing sessions found');
+            return;
+        }
+
+        console.log(`📋 [AUTO-INIT] Found ${sessions.length} session(s) to initialize`);
+
+        for (const session of sessions) {
+            const { session_id, status } = session;
+            
+            // Check if session file exists
+            const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-${session_id}`);
+            try {
+                await fs.access(sessionPath);
+                console.log(`🔄 [AUTO-INIT] Initializing session: ${session_id} (status: ${status})`);
+                
+                // Create client instance
+                const client = createClient(session_id);
+                clients.set(session_id, client);
+                sessionStatuses.set(session_id, 'initializing');
+
+                // Initialize client (will auto-login if session file exists)
+                client.initialize().then(() => {
+                    console.log(`✅ [AUTO-INIT] Client initialization started for: ${session_id}`);
+                }).catch(err => {
+                    console.error(`❌ [AUTO-INIT] Error initializing session ${session_id}:`, err.message);
+                });
+            } catch (err) {
+                console.log(`⚠️  [AUTO-INIT] Session file not found for ${session_id}, skipping...`);
+            }
+        }
+    } catch (error) {
+        console.error('❌ [AUTO-INIT] Error initializing existing sessions:', error.message);
+    }
+}
+
+server.listen(PORT, async () => {
     console.log(`🚀 WhatsApp Multi-Instance API Server running on port ${PORT}`);
     console.log(`📡 WebSocket server ready`);
     console.log(`📚 API Documentation:`);
@@ -1685,6 +1731,9 @@ server.listen(PORT, () => {
     console.log(`   POST /api/messages/send - Send message`);
     console.log(`   GET  /api/messages - Get sent messages`);
     console.log(`   POST /api/messages/typing - Send typing signal`);
+    
+    // Auto-initialize existing sessions
+    await initializeExistingSessions();
     console.log(`   POST /api/status/set - Set status`);
     console.log(`   POST /api/stories/set - Set story`);
     console.log(`   POST /api/broadcast/send - Send broadcast`);
