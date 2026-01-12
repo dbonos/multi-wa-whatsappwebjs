@@ -29,13 +29,28 @@ WhatsApp menggunakan 2 tipe identifier:
 
 ## 📚 Documentation
 
-- **[🚀 CAPABILITIES.md](CAPABILITIES.md)** - Complete guide: Apa saja yang bisa dilakukan dengan whatsapp-web.js
-- **[📱 CONNECT-NEW-NUMBER.md](CONNECT-NEW-NUMBER.md)** - **NEW!** How to connect new WhatsApp numbers (step-by-step)
-- **[🤖 PUPPETEER.md](PUPPETEER.md)** - Puppeteer architecture, optimization & troubleshooting
-- **[📊 LID-HANDLING.md](LID-HANDLING.md)** - Advanced @lid handling & phone extraction
-- **[🔧 DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment workflow & service management
-- **[🖥️ SERVER-CONFIG.md](SERVER-CONFIG.md)** - Server configuration & SSH access
-- **[📋 SUMMARY.md](SUMMARY.md)** - Executive summary & comparison
+**📖 [Complete Documentation Index →](docs/README.md)**
+
+### **Quick Start**
+- **[🚀 START HERE](docs/setup/START-HERE.md)** - Complete setup guide
+- **[⚡ Quick Start](docs/setup/QUICK-START.md)** - Quick start guide
+
+### **Setup**
+- **[💻 Localhost Setup](docs/setup/SETUP-LOCALHOST.md)** - Development setup
+- **[🖥️ Server Setup](docs/setup/SETUP-SERVER.md)** - Production setup
+- **[🗄️ MySQL Setup](docs/setup/MYSQL-SETUP.md)** - Database configuration
+
+### **Features**
+- **[✨ Features List](docs/features/FEATURES.md)** - Complete feature list
+- **[📱 Connect New Number](docs/features/CONNECT-NEW-NUMBER.md)** - How to connect WhatsApp numbers
+- **[📊 @lid Handling](docs/features/LID-HANDLING.md)** - Advanced @lid handling
+
+### **Deployment**
+- **[🚀 Deployment Guide](docs/deployment/DEPLOYMENT.md)** - Deployment workflow
+- **[🔄 Development Workflow](docs/deployment/WORKFLOW.md)** - Local → Server workflow
+
+### **API**
+- **[📡 API Documentation](docs/api/API-DOCUMENTATION.md)** - Complete API reference
 
 ## Installation
 
