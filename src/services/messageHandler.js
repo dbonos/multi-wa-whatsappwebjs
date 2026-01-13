@@ -278,7 +278,7 @@ class MessageHandler {
                     contactId: contactId,
                     type: messageType,
                     body: message.body || caption,
-                    timestamp: message.timestamp,
+                    timestamp: message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
                     attachment: attachmentPath ? {
                         path: attachmentPath,
                         type: messageType
