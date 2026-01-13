@@ -1959,6 +1959,35 @@ function createClient(sessionId) {
         console.log(`⏳ [LOADING] Session ${sessionId}: ${percent}% - ${message}`);
         sessionStatuses.set(sessionId, `loading_${percent}`);
         socketHandler.emitSessionStatus(sessionId, 'loading', { percent, message });
+        
+        // Fallback: If loading reaches 99% and we have client info, auto-set to ready after 10 seconds
+        if (percent >= 99 && client.info) {
+            console.log(`⏳ [LOADING] Session ${sessionId} at 99% with info available, setting timeout for auto-ready...`);
+            setTimeout(async () => {
+                const currentStatus = sessionStatuses.get(sessionId);
+                // Only auto-set if still loading and info is available
+                if (currentStatus && currentStatus.startsWith('loading_') && client.info) {
+                    console.log(`✅ [LOADING FALLBACK] Auto-setting session ${sessionId} to ready (loading stuck at ${percent}%)`);
+                    sessionStatuses.set(sessionId, 'ready');
+                    
+                    await pool.execute(
+                        `UPDATE sessions 
+                         SET status = 'ready', 
+                             phone_number = ?,
+                             display_name = ?,
+                             last_activity = CURRENT_TIMESTAMP
+                         WHERE session_id = ?`,
+                        [
+                            client.info.wid?.user || null,
+                            client.info.pushname || null,
+                            sessionId
+                        ]
+                    );
+                    
+                    socketHandler.emitSessionStatus(sessionId, 'ready', { info: client.info });
+                }
+            }, 10000); // Wait 10 seconds before auto-setting to ready
+        }
     });
 
     // QR Code event
