@@ -95,15 +95,30 @@ export default function Broadcast() {
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!selectedList || (!message.trim() && !attachment)) return;
+    if (!selectedSession || !selectedList || (!message.trim() && !attachment)) {
+      alert('Please select session, broadcast list, and provide message or attachment');
+      return;
+    }
 
     setSending(true);
     try {
       const formData = new FormData();
-      formData.append('sessionId', selectedSession);
-      formData.append('broadcastListId', selectedList);
-      if (message.trim()) formData.append('message', message);
-      if (attachment) formData.append('attachment', attachment);
+      formData.append('sessionId', selectedSession.trim());
+      formData.append('broadcastListId', selectedList.toString());
+      if (message.trim()) {
+        formData.append('message', message.trim());
+      }
+      if (attachment) {
+        formData.append('attachment', attachment);
+      }
+
+      console.log('📤 [BROADCAST] Sending broadcast:', {
+        sessionId: selectedSession,
+        broadcastListId: selectedList,
+        hasMessage: !!message.trim(),
+        hasAttachment: !!attachment,
+        formDataKeys: Array.from(formData.keys())
+      });
 
       const response = await broadcastAPI.send(formData);
       alert(

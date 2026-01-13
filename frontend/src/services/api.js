@@ -43,6 +43,8 @@ api.interceptors.request.use(
         hasPhone: config.data.has('phone'),
         hasMessage: config.data.has('message'),
         hasAttachment: config.data.has('attachment'),
+        hasBroadcastListId: config.data.has('broadcastListId'),
+        formDataKeys: Array.from(config.data.keys()),
         headers: {
           Authorization: config.headers.Authorization ? 'Bearer ***' : 'MISSING',
           'Content-Type': config.headers['Content-Type'] || 'will be set by browser'
@@ -226,12 +228,19 @@ export const broadcastAPI = {
   createList: (data) => api.post('/broadcast/lists', data),
   
   send: (data) => {
-    const formData = new FormData();
-    Object.keys(data).forEach(key => {
-      if (data[key] !== null && data[key] !== undefined) {
-        formData.append(key, data[key]);
-      }
-    });
+    // If data is already FormData, use it directly
+    // Otherwise, create new FormData from object
+    let formData;
+    if (data instanceof FormData) {
+      formData = data;
+    } else {
+      formData = new FormData();
+      Object.keys(data).forEach(key => {
+        if (data[key] !== null && data[key] !== undefined) {
+          formData.append(key, data[key]);
+        }
+      });
+    }
     return api.post('/broadcast/send', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
