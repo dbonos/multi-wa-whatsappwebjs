@@ -1508,6 +1508,247 @@ app.get('/api/contacts/:contactId', authenticate, async (req, res) => {
 });
 
 // ============================================
+// SKIP MESSAGES ENDPOINTS
+// ============================================
+
+// Get skip messages list
+app.get('/api/skip-messages', authenticate, async (req, res) => {
+    try {
+        const { sessionId, type } = req.query;
+        
+        let query = 'SELECT * FROM skip_messages WHERE 1=1';
+        const params = [];
+        
+        if (sessionId) {
+            query += ' AND session_id = ?';
+            params.push(sessionId);
+        }
+        
+        if (type) {
+            query += ' AND type = ?';
+            params.push(type);
+        }
+        
+        // User can only see their own session's skip list
+        if (req.user.role !== 'admin') {
+            query += ' AND session_id = ?';
+            params.push(req.user.session_id);
+        }
+        
+        query += ' ORDER BY created_at DESC';
+        
+        const [skipList] = await pool.execute(query, params);
+        
+        res.json({ success: true, skipList });
+    } catch (error) {
+        console.error('Error getting skip messages:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get groups for skip list (all groups from contacts)
+app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
+    try {
+        const { sessionId } = req.query;
+        const targetSessionId = req.user.role === 'admin' ? sessionId : req.user.session_id;
+        
+        if (!targetSessionId) {
+            return res.status(400).json({ error: 'sessionId is required' });
+        }
+        
+        // Get all groups from contacts
+        const [groups] = await pool.execute(
+            `SELECT DISTINCT 
+                c.contact_id as group_id,
+                c.name,
+                c.pushname,
+                COUNT(DISTINCT m.id) as message_count,
+                MAX(m.timestamp) as last_message_time
+            FROM contacts c
+            LEFT JOIN messages m ON m.contact_id = c.contact_id AND m.session_id = c.session_id
+            WHERE c.session_id = ? AND c.is_group = TRUE
+            GROUP BY c.contact_id, c.name, c.pushname
+            ORDER BY last_message_time DESC, c.name ASC`,
+            [targetSessionId]
+        );
+        
+        // Get which groups are already in skip list
+        const [skipGroups] = await pool.execute(
+            `SELECT group_id FROM skip_messages 
+            WHERE session_id = ? AND type = 'group' AND is_active = TRUE`,
+            [targetSessionId]
+        );
+        const skippedGroupIds = new Set(skipGroups.map(g => g.group_id));
+        
+        // Add skip status to each group
+        const groupsWithSkipStatus = groups.map(group => ({
+            ...group,
+            is_skipped: skippedGroupIds.has(group.group_id)
+        }));
+        
+        res.json({ success: true, groups: groupsWithSkipStatus });
+    } catch (error) {
+        console.error('Error getting groups:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add skip rule
+app.post('/api/skip-messages', authenticate, async (req, res) => {
+    try {
+        const { sessionId, type, groupId, contactId, phoneNumber, name, description } = req.body;
+        
+        if (!sessionId || !type) {
+            return res.status(400).json({ error: 'sessionId and type are required' });
+        }
+        
+        // Validate type
+        if (!['group', 'contact'].includes(type)) {
+            return res.status(400).json({ error: 'type must be "group" or "contact"' });
+        }
+        
+        // Validate based on type
+        if (type === 'group' && !groupId) {
+            return res.status(400).json({ error: 'groupId is required for type=group' });
+        }
+        
+        if (type === 'contact' && !contactId && !phoneNumber) {
+            return res.status(400).json({ error: 'contactId or phoneNumber is required for type=contact' });
+        }
+        
+        // User can only add skip rules for their own session
+        if (req.user.role !== 'admin' && sessionId !== req.user.session_id) {
+            return res.status(403).json({ error: 'You can only add skip rules for your own session' });
+        }
+        
+        // Check if already exists
+        let checkQuery = 'SELECT id FROM skip_messages WHERE session_id = ? AND type = ? AND is_active = TRUE';
+        const checkParams = [sessionId, type];
+        
+        if (type === 'group') {
+            checkQuery += ' AND group_id = ?';
+            checkParams.push(groupId);
+        } else {
+            checkQuery += ' AND (contact_id = ? OR phone_number = ?)';
+            checkParams.push(contactId || phoneNumber, phoneNumber || contactId);
+        }
+        
+        const [existing] = await pool.execute(checkQuery, checkParams);
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'Skip rule already exists' });
+        }
+        
+        // Insert skip rule
+        const [result] = await pool.execute(
+            `INSERT INTO skip_messages 
+            (session_id, type, group_id, contact_id, phone_number, name, description, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [sessionId, type, groupId || null, contactId || null, phoneNumber || null, name || null, description || null, req.user.id]
+        );
+        
+        res.json({
+            success: true,
+            skipRuleId: result.insertId,
+            message: 'Skip rule added successfully'
+        });
+    } catch (error) {
+        console.error('Error adding skip rule:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update skip rule (toggle active/inactive)
+app.put('/api/skip-messages/:id', authenticate, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isActive, name, description } = req.body;
+        
+        // Get skip rule
+        const [skipRules] = await pool.execute(
+            'SELECT * FROM skip_messages WHERE id = ?',
+            [id]
+        );
+        
+        if (skipRules.length === 0) {
+            return res.status(404).json({ error: 'Skip rule not found' });
+        }
+        
+        const skipRule = skipRules[0];
+        
+        // User can only update their own session's skip rules
+        if (req.user.role !== 'admin' && skipRule.session_id !== req.user.session_id) {
+            return res.status(403).json({ error: 'You can only update skip rules for your own session' });
+        }
+        
+        // Update
+        const updateFields = [];
+        const updateParams = [];
+        
+        if (isActive !== undefined) {
+            updateFields.push('is_active = ?');
+            updateParams.push(isActive);
+        }
+        
+        if (name !== undefined) {
+            updateFields.push('name = ?');
+            updateParams.push(name);
+        }
+        
+        if (description !== undefined) {
+            updateFields.push('description = ?');
+            updateParams.push(description);
+        }
+        
+        if (updateFields.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+        
+        updateParams.push(id);
+        
+        await pool.execute(
+            `UPDATE skip_messages SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            updateParams
+        );
+        
+        res.json({ success: true, message: 'Skip rule updated successfully' });
+    } catch (error) {
+        console.error('Error updating skip rule:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete skip rule
+app.delete('/api/skip-messages/:id', authenticate, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Get skip rule
+        const [skipRules] = await pool.execute(
+            'SELECT * FROM skip_messages WHERE id = ?',
+            [id]
+        );
+        
+        if (skipRules.length === 0) {
+            return res.status(404).json({ error: 'Skip rule not found' });
+        }
+        
+        const skipRule = skipRules[0];
+        
+        // User can only delete their own session's skip rules
+        if (req.user.role !== 'admin' && skipRule.session_id !== req.user.session_id) {
+            return res.status(403).json({ error: 'You can only delete skip rules for your own session' });
+        }
+        
+        await pool.execute('DELETE FROM skip_messages WHERE id = ?', [id]);
+        
+        res.json({ success: true, message: 'Skip rule deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting skip rule:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // WEBHOOK ENDPOINTS
 // ============================================
 
@@ -1697,16 +1938,19 @@ function createClient(sessionId) {
     // Message event (incoming)
     client.on('message', async (message) => {
         try {
-            // Auto-save message dengan @lid conversion
-            await messageHandler.saveIncomingMessage(sessionId, message);
+            // Auto-save message dengan @lid conversion (will skip if in skip list)
+            const result = await messageHandler.saveIncomingMessage(sessionId, message);
 
-            // Emit via WebSocket
-            socketHandler.emitNewMessage(sessionId, {
-                id: message.id._serialized,
-                body: message.body,
-                from: message.from,
-                timestamp: message.timestamp
-            });
+            // Only emit via WebSocket if message was not skipped
+            // (Skipped messages are not saved but can still be emitted if needed)
+            if (!result || !result.skipped) {
+                socketHandler.emitNewMessage(sessionId, {
+                    id: message.id._serialized,
+                    body: message.body,
+                    from: message.from,
+                    timestamp: message.timestamp
+                });
+            }
 
             // Update last activity
             await pool.execute(

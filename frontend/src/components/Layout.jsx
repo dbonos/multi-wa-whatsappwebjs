@@ -14,6 +14,7 @@ import {
   Moon,
   User,
   Key,
+  Ban,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from './ui/button';
@@ -35,6 +36,7 @@ export default function Layout({ children }) {
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false },
     { path: '/messages', icon: MessageSquare, label: 'Messages', adminOnly: false },
     { path: '/contacts', icon: User, label: 'Contacts', adminOnly: false },
+    { path: '/skip-messages', icon: Ban, label: 'Skip Messages', adminOnly: false },
     { path: '/broadcast', icon: Radio, label: 'Broadcast', adminOnly: true },
     { path: '/status', icon: Image, label: 'Status & Stories', adminOnly: true },
   ].filter(item => isAdmin || !item.adminOnly);

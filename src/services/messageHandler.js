@@ -72,11 +72,68 @@ class MessageHandler {
         }
     }
 
+    // Check if message should be skipped (not saved to database)
+    async shouldSkipMessage(sessionId, contactId, fromNumber, isGroup) {
+        try {
+            if (isGroup) {
+                // Check if group is in skip list
+                const [skipGroups] = await pool.execute(
+                    `SELECT id FROM skip_messages 
+                    WHERE session_id = ? 
+                    AND type = 'group' 
+                    AND group_id = ? 
+                    AND is_active = TRUE`,
+                    [sessionId, contactId]
+                );
+                if (skipGroups.length > 0) {
+                    console.log(`⏭️  [SKIP] Skipping message from group: ${contactId}`);
+                    return true;
+                }
+            } else {
+                // Check if contact/phone is in skip list
+                const [skipContacts] = await pool.execute(
+                    `SELECT id FROM skip_messages 
+                    WHERE session_id = ? 
+                    AND type = 'contact' 
+                    AND is_active = TRUE
+                    AND (
+                        contact_id = ? 
+                        OR phone_number = ?
+                        OR (? IS NOT NULL AND phone_number = ?)
+                    )`,
+                    [sessionId, contactId, contactId, fromNumber, fromNumber]
+                );
+                if (skipContacts.length > 0) {
+                    console.log(`⏭️  [SKIP] Skipping message from contact: ${contactId} (${fromNumber})`);
+                    return true;
+                }
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking skip list:', error);
+            // If error, don't skip (save message to be safe)
+            return false;
+        }
+    }
+
     // Save incoming message to database
     async saveIncomingMessage(sessionId, message) {
         try {
             const chat = await message.getChat();
             const contact = await message.getContact();
+            
+            // Check if this is a group
+            const isGroup = chat.isGroup || false;
+            const contactId = contact.id._serialized;
+            const fromNumber = contact.number || null;
+            
+            // Check if message should be skipped
+            const shouldSkip = await this.shouldSkipMessage(sessionId, contactId, fromNumber, isGroup);
+            if (shouldSkip) {
+                console.log(`⏭️  [SKIP] Message skipped (not saved to database): ${message.id._serialized}`);
+                // Still emit via WebSocket for real-time, but don't save to DB
+                return { skipped: true, messageId: message.id._serialized };
+            }
             
             // Save contact first (with @lid conversion)
             const contactInfo = await this.saveContact(sessionId, contact);
@@ -104,6 +161,17 @@ class MessageHandler {
             // Extract phone numbers
             const fromNumber = contactInfo?.phoneNumber || contact.number || null;
             const contactId = contact.id._serialized;
+            
+            // Check if this is a group
+            const isGroup = chat.isGroup || false;
+            
+            // Check if message should be skipped
+            const shouldSkip = await this.shouldSkipMessage(sessionId, contactId, fromNumber, isGroup);
+            if (shouldSkip) {
+                console.log(`⏭️  [SKIP] Message skipped (not saved to database): ${message.id._serialized} from ${isGroup ? 'group' : 'contact'} ${contactId}`);
+                // Still emit via WebSocket for real-time, but don't save to DB
+                return { skipped: true, messageId: message.id._serialized };
+            }
 
             // Check if message is a reply
             let replyToMessageId = null;

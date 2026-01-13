@@ -259,5 +259,18 @@ export const contactsAPI = {
   get: (contactId, sessionId) => api.get(`/contacts/${contactId}`, { params: { sessionId } }),
 };
 
+// Skip Messages API
+export const skipMessagesAPI = {
+  list: (params = {}) => api.get('/skip-messages', { params }),
+  
+  getGroups: (sessionId) => api.get('/skip-messages/groups', { params: { sessionId } }),
+  
+  add: (data) => api.post('/skip-messages', data),
+  
+  update: (id, data) => api.put(`/skip-messages/${id}`, data),
+  
+  delete: (id) => api.delete(`/skip-messages/${id}`),
+};
+
 export default api;
 

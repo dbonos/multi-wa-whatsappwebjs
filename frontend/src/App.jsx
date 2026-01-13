@@ -10,6 +10,7 @@ import Messages from './pages/Messages';
 import Broadcast from './pages/Broadcast';
 import Status from './pages/Status';
 import Contacts from './pages/Contacts';
+import SkipMessages from './pages/SkipMessages';
 import ChangePassword from './pages/ChangePassword';
 
 function AppRoutes() {
@@ -67,6 +68,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <Contacts />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/skip-messages"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SkipMessages />
             </Layout>
           </ProtectedRoute>
         }
