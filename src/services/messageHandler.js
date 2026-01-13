@@ -296,6 +296,11 @@ class MessageHandler {
                 ]
             );
             
+            console.log(`💾 [MESSAGE HANDLER] Database insert result:`, {
+                insertId: result.insertId,
+                affectedRows: result.affectedRows
+            });
+            
             // If ON DUPLICATE KEY UPDATE was used, result.insertId will be 0
             if (result.insertId === 0) {
                 console.log(`ℹ️ [MESSAGE HANDLER] Outgoing message already exists in database: ${message.id._serialized}`);
