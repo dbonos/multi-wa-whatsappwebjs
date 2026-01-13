@@ -1359,6 +1359,7 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
         );
 
         const broadcastMessageId = broadcastResult.insertId;
+        console.log(`📢 [BROADCAST] Starting broadcast ${broadcastMessageId} to ${recipients.length} recipients`);
 
         // Send messages
         let sentCount = 0;
@@ -1376,6 +1377,12 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
                     const media = MessageMedia.fromFilePath(file.path);
                     // Use caption if provided, otherwise use message
                     const mediaCaption = caption || message || null;
+                    console.log(`📢 [BROADCAST] Sending to ${chatId}:`, {
+                        hasFile: true,
+                        caption: caption || 'null',
+                        message: message || 'null',
+                        mediaCaption: mediaCaption || 'null'
+                    });
                     if (mediaCaption) {
                         media.caption = mediaCaption;
                     }
@@ -1384,6 +1391,7 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
                     if (!message) {
                         throw new Error('Message is required when no attachment');
                     }
+                    console.log(`📢 [BROADCAST] Sending text to ${chatId}:`, message.substring(0, 50));
                     sentMessage = await client.sendMessage(chatId, message);
                 }
 
@@ -1396,19 +1404,25 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
                 );
 
                 sentCount++;
+                console.log(`✅ [BROADCAST] Sent to ${chatId} (${sentCount}/${recipients.length})`);
             } catch (error) {
-                console.error(`Error sending to ${recipient.phone_number}:`, error);
-                await pool.execute(
-                    `UPDATE broadcast_recipients 
-                     SET status = 'failed' 
-                     WHERE id = ?`,
-                    [recipient.id]
-                );
+                console.error(`❌ [BROADCAST] Error sending to ${recipient.phone_number || recipient.contact_id}:`, error.message);
+                try {
+                    await pool.execute(
+                        `UPDATE broadcast_recipients 
+                         SET status = 'failed' 
+                         WHERE id = ?`,
+                        [recipient.id]
+                    );
+                } catch (updateError) {
+                    console.error(`❌ [BROADCAST] Error updating recipient status:`, updateError.message);
+                }
                 failedCount++;
             }
         }
 
         // Update broadcast message status
+        console.log(`📢 [BROADCAST] Completed: sent=${sentCount}, failed=${failedCount}, total=${recipients.length}`);
         await pool.execute(
             `UPDATE broadcast_messages 
              SET status = 'completed', sent_count = ?, failed_count = ?, completed_at = CURRENT_TIMESTAMP 
