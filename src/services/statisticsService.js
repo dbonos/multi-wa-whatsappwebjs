@@ -342,7 +342,7 @@ class StatisticsService {
                 
                 // Process new customers
                 // count = total unique customers (yang punya reply + yang tidak punya reply)
-                // unreplied_count = unique customers yang tidak punya reply
+                // unreplied_count = unique customers yang TIDAK PERNAH dibalas sepanjang hari (bukan per periode)
                 for (const fromNumber of periodData.newCustomers) {
                     // Count all unique customers
                     stat.new_customer.count++;
@@ -351,15 +351,17 @@ class StatisticsService {
                     if (periodData.customerReplies.has(fromNumber)) {
                         const responseTime = periodData.customerReplies.get(fromNumber);
                         stat.new_customer.response_times.push(responseTime);
-                    } else {
-                        // Customer has no replies at all - count as unreplied
+                    }
+                    
+                    // Unreplied = customer yang TIDAK PERNAH dibalas sepanjang hari (cek dari customersRepliedDuringDay)
+                    if (!customersRepliedDuringDay.has(fromNumber)) {
                         stat.new_customer.unreplied_count++;
                     }
                 }
                 
                 // Process previous customers
                 // count = total unique customers (yang punya reply + yang tidak punya reply)
-                // unreplied_count = unique customers yang tidak punya reply
+                // unreplied_count = unique customers yang TIDAK PERNAH dibalas sepanjang hari (bukan per periode)
                 for (const fromNumber of periodData.previousCustomers) {
                     // Count all unique customers
                     stat.previous_customer.count++;
@@ -368,8 +370,10 @@ class StatisticsService {
                     if (periodData.customerReplies.has(fromNumber)) {
                         const responseTime = periodData.customerReplies.get(fromNumber);
                         stat.previous_customer.response_times.push(responseTime);
-                    } else {
-                        // Customer has no replies at all - count as unreplied
+                    }
+                    
+                    // Unreplied = customer yang TIDAK PERNAH dibalas sepanjang hari (cek dari customersRepliedDuringDay)
+                    if (!customersRepliedDuringDay.has(fromNumber)) {
                         stat.previous_customer.unreplied_count++;
                     }
                 }
