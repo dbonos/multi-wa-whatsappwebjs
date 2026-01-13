@@ -49,18 +49,15 @@ pool.getConnection = async function() {
 
 // Wrap execute() to ensure timezone is set before each query
 // CRITICAL: Always set timezone to ensure CURRENT_TIMESTAMP uses WIB
+// This affects all columns ending with _at (created_at, updated_at, deleted_at, etc.)
 const originalExecute = pool.execute.bind(pool);
 pool.execute = async function(sql, params) {
     const connection = await originalGetConnection();
     try {
         // CRITICAL: ALWAYS set timezone BEFORE executing query
         // This ensures CURRENT_TIMESTAMP in INSERT/UPDATE uses WIB
-        // Only log for INSERT/UPDATE queries to avoid spam
-        const isInsertOrUpdate = sql.trim().toUpperCase().startsWith('INSERT') || 
-                                 sql.trim().toUpperCase().startsWith('UPDATE');
-        if (isInsertOrUpdate) {
-            console.log(`🕐 [DB] Setting timezone to +07:00 before ${sql.trim().substring(0, 20)}...`);
-        }
+        // Affects: created_at, updated_at, deleted_at, retracted_at, webhook_sent_at, 
+        //          connected_at, last_activity, qr_expires_at, completed_at, sent_at, etc.
         await connection.query("SET time_zone = '+07:00'");
         const result = await connection.execute(sql, params);
         return result;
@@ -70,11 +67,13 @@ pool.execute = async function(sql, params) {
 };
 
 // Wrap query() to ensure timezone is set before each query
+// CRITICAL: Always set timezone to ensure CURRENT_TIMESTAMP uses WIB
 const originalQuery = pool.query.bind(pool);
 pool.query = async function(sql, params) {
     const connection = await originalGetConnection();
     try {
         // CRITICAL: ALWAYS set timezone BEFORE executing query
+        // This ensures CURRENT_TIMESTAMP uses WIB for all _at columns
         await connection.query("SET time_zone = '+07:00'");
         const result = await connection.query(sql, params);
         return result;
