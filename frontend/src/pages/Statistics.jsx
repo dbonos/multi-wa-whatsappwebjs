@@ -271,6 +271,12 @@ export default function Statistics() {
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
+                              <Clock className="w-3 h-3 text-blue-500" />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                Rata-rata: {formatTime(stat.new_customer.avg_response_time_seconds || 0)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <Clock className="w-3 h-3 text-red-500" />
                               <span className="text-sm text-gray-600 dark:text-gray-400">
                                 Terlama: {formatTime(stat.new_customer.slowest_response_time_seconds)}

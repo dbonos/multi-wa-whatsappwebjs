@@ -200,6 +200,8 @@ class StatisticsService {
                     count: 0,
                     fastest_response_time_seconds: 0,
                     fastest_response_time_minutes: 0,
+                    avg_response_time_seconds: 0,
+                    avg_response_time_minutes: 0,
                     slowest_response_time_seconds: 0,
                     slowest_response_time_minutes: 0,
                     unreplied_count: 0
@@ -209,6 +211,8 @@ class StatisticsService {
                     count: 0,
                     fastest_response_time_seconds: 0,
                     fastest_response_time_minutes: 0,
+                    avg_response_time_seconds: 0,
+                    avg_response_time_minutes: 0,
                     slowest_response_time_seconds: 0,
                     slowest_response_time_minutes: 0,
                     unreplied_count: 0
@@ -331,7 +335,7 @@ class StatisticsService {
                 }
             }
 
-            // Calculate fastest and slowest response times
+            // Calculate fastest, average, and slowest response times
             statistics.forEach((stat, periodIdx) => {
                 ['new_customer', 'previous_customer'].forEach(category => {
                     const data = stat[category];
@@ -340,8 +344,15 @@ class StatisticsService {
                         const fastest = Math.min(...data.response_times);
                         const slowest = Math.max(...data.response_times);
                         
+                        // Calculate average
+                        const sum = data.response_times.reduce((a, b) => a + b, 0);
+                        const avg = Math.round(sum / data.response_times.length);
+                        
                         data.fastest_response_time_seconds = fastest;
                         data.fastest_response_time_minutes = Math.round((fastest / 60) * 100) / 100;
+                        
+                        data.avg_response_time_seconds = avg;
+                        data.avg_response_time_minutes = Math.round((avg / 60) * 100) / 100;
                         
                         data.slowest_response_time_seconds = slowest;
                         data.slowest_response_time_minutes = Math.round((slowest / 60) * 100) / 100;
@@ -349,7 +360,7 @@ class StatisticsService {
                     // Log statistics for debugging
                     if (data.count > 0 || data.unreplied_count > 0) {
                         if (data.response_times.length > 0) {
-                            console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}, Fastest: ${data.fastest_response_time_seconds}s, Slowest: ${data.slowest_response_time_seconds}s`);
+                            console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}, Fastest: ${data.fastest_response_time_seconds}s, Avg: ${data.avg_response_time_seconds}s, Slowest: ${data.slowest_response_time_seconds}s`);
                         } else {
                             console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}`);
                         }
