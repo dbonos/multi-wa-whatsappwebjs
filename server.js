@@ -760,8 +760,17 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             // If there's text with attachment, use it as caption
             // Priority: caption field > message field
             const mediaCaption = caption || message || null;
+            console.log(`📎 [SEND MESSAGE] Attachment caption:`, {
+                caption: caption || 'null',
+                message: message || 'null',
+                mediaCaption: mediaCaption || 'null',
+                willSetCaption: !!mediaCaption
+            });
             if (mediaCaption) {
                 media.caption = mediaCaption;
+                console.log(`✅ [SEND MESSAGE] Caption set on media: "${mediaCaption.substring(0, 50)}${mediaCaption.length > 50 ? '...' : ''}"`);
+            } else {
+                console.log(`⚠️ [SEND MESSAGE] No caption provided for attachment`);
             }
 
             sentMessage = await client.sendMessage(chatId, media);
