@@ -2516,6 +2516,57 @@ function createClient(sessionId) {
         }
     });
 
+    // Message create event - catches ALL messages including outgoing from mobile
+    // This is a more reliable way to catch outgoing messages from mobile device
+    client.on('message_create', async (message) => {
+        try {
+            console.log(`🔍 [MESSAGE_CREATE] Session: ${sessionId}, Message ID: ${message.id._serialized}`);
+            console.log(`🔍 [MESSAGE_CREATE] Properties:`, {
+                fromMe: message.fromMe,
+                from: message.from,
+                to: message.to,
+                hasMedia: message.hasMedia,
+                body: message.body ? message.body.substring(0, 50) : null
+            });
+            
+            // Only process if fromMe (outgoing) and not already processed by 'message' event
+            if (message.fromMe === true || message.fromMe === 1) {
+                console.log(`📤 [MESSAGE_CREATE OUTGOING] Session: ${sessionId}, Message ID: ${message.id._serialized}, To: ${message.to || 'unknown'}`);
+                
+                // Check if message already exists in database (to avoid duplicate)
+                try {
+                    const [existing] = await pool.execute(
+                        `SELECT id FROM messages WHERE message_id = ? LIMIT 1`,
+                        [message.id._serialized]
+                    );
+                    
+                    if (existing.length > 0) {
+                        console.log(`ℹ️ [MESSAGE_CREATE] Message ${message.id._serialized} already exists in database, skipping`);
+                        return;
+                    }
+                } catch (checkError) {
+                    console.error(`❌ [MESSAGE_CREATE] Error checking existing message:`, checkError.message);
+                }
+                
+                // Auto-save outgoing message from mobile device
+                const result = await messageHandler.saveOutgoingMessage(sessionId, message);
+                
+                if (!result) {
+                    console.error(`❌ [MESSAGE_CREATE] saveOutgoingMessage returned null/undefined`);
+                } else if (result.skipped) {
+                    console.log(`⏭️ [MESSAGE_CREATE] Message skipped (destination in skip list)`);
+                } else if (result.success === false) {
+                    console.error(`❌ [MESSAGE_CREATE] Message save failed: ${result.error || 'Unknown error'}`);
+                } else if (result.success === true || result.insertId) {
+                    console.log(`✅ [MESSAGE_CREATE] Message saved successfully, insertId: ${result.insertId}`);
+                }
+            }
+        } catch (error) {
+            console.error(`❌ [MESSAGE_CREATE] Error handling message_create for ${sessionId}:`, error);
+            console.error(`❌ [MESSAGE_CREATE] Error stack:`, error.stack);
+        }
+    });
+
     // Auth failure
     client.on('auth_failure', async (msg) => {
         console.error(`[${sessionId}] Authentication failure:`, msg);
