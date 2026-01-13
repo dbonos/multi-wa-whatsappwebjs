@@ -279,32 +279,25 @@ class MessageHandler {
                 await this.saveReply(sessionId, message.id._serialized, replyToMessageId);
             }
 
-            // Forward to webhook if configured
-            if (this.webhookBaseUrl) {
-                try {
-                    await axios.post(`${this.webhookBaseUrl}/webhook/message`, {
-                        event: 'message',
-                        sessionId: sessionId,
-                        message: {
-                            id: message.id._serialized,
-                            from: null, // Outgoing message
-                            to: finalToNumber,
-                            contactId: finalContactId,
-                            type: messageType,
-                            body: message.body || caption,
-                            timestamp: message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
-                            attachment: attachmentPath ? {
-                                path: attachmentPath,
-                                type: messageType
-                            } : null,
-                            direction: 'outgoing',
-                            fromAI: 0
-                        }
-                    });
-                } catch (webhookError) {
-                    console.error('Error forwarding to webhook:', webhookError.message);
+            // Forward to webhook
+            await this.forwardToWebhook(sessionId, {
+                event: 'message',
+                message: {
+                    id: message.id._serialized,
+                    from: null, // Outgoing message from mobile device
+                    to: finalToNumber,
+                    contactId: finalContactId,
+                    type: messageType,
+                    body: message.body || caption,
+                    timestamp: message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
+                    attachment: attachmentPath ? {
+                        path: attachmentPath,
+                        type: messageType
+                    } : null,
+                    direction: 'outgoing',
+                    fromAI: 0
                 }
-            }
+            });
 
             return { success: true, insertId: result.insertId, messageId: message.id._serialized };
         } catch (error) {
