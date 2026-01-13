@@ -820,7 +820,31 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
 
         // Send with attachment
         if (file) {
-            const media = MessageMedia.fromFilePath(file.path);
+            console.log(`📎 [SEND MESSAGE] Preparing to send attachment:`, {
+                filename: file.filename,
+                mimetype: file.mimetype,
+                size: file.size,
+                path: file.path
+            });
+            
+            let media;
+            const fsSync = require('fs');
+            try {
+                media = MessageMedia.fromFilePath(file.path);
+            } catch (mediaError) {
+                console.error(`❌ [SEND MESSAGE] Error creating MessageMedia from file path:`, mediaError.message);
+                // Try reading file and creating from buffer instead
+                try {
+                    const fileBuffer = fsSync.readFileSync(file.path);
+                    const base64 = fileBuffer.toString('base64');
+                    media = new MessageMedia(file.mimetype, base64, file.filename);
+                    console.log(`✅ [SEND MESSAGE] Created MessageMedia from buffer instead`);
+                } catch (bufferError) {
+                    console.error(`❌ [SEND MESSAGE] Error creating MessageMedia from buffer:`, bufferError.message);
+                    throw new Error(`Failed to create media object: ${bufferError.message}`);
+                }
+            }
+            
             // If there's text with attachment, use it as caption
             // Priority: caption field > message field
             const mediaCaption = caption || message || null;
@@ -837,7 +861,44 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 console.log(`⚠️ [SEND MESSAGE] No caption provided for attachment`);
             }
 
-            sentMessage = await client.sendMessage(chatId, media);
+            // Retry mechanism for detached frame errors
+            let retries = 3;
+            let lastError = null;
+            while (retries > 0) {
+                try {
+                    console.log(`📤 [SEND MESSAGE] Attempting to send message (${4 - retries}/3)...`);
+                    sentMessage = await client.sendMessage(chatId, media);
+                    console.log(`✅ [SEND MESSAGE] Message sent successfully`);
+                    break;
+                } catch (sendError) {
+                    lastError = sendError;
+                    if (sendError.message && sendError.message.includes('detached Frame')) {
+                        console.error(`❌ [SEND MESSAGE] Detached frame error, retrying... (${retries} attempts left)`);
+                        retries--;
+                        if (retries > 0) {
+                            // Wait a bit before retry
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            // Recreate media object from buffer
+                            try {
+                                const fileBuffer = fsSync.readFileSync(file.path);
+                                const base64 = fileBuffer.toString('base64');
+                                media = new MessageMedia(file.mimetype, base64, file.filename);
+                                if (mediaCaption) media.caption = mediaCaption;
+                                console.log(`🔄 [SEND MESSAGE] Recreated media object for retry`);
+                            } catch (recreateError) {
+                                console.error(`❌ [SEND MESSAGE] Error recreating media:`, recreateError.message);
+                            }
+                        }
+                    } else {
+                        // Not a detached frame error, don't retry
+                        throw sendError;
+                    }
+                }
+            }
+            
+            if (!sentMessage && lastError) {
+                throw lastError;
+            }
         } else {
             // Send text message
             if (!message) {
