@@ -106,7 +106,7 @@ export function PeriodComparisonChart({ data, periods }) {
           <YAxis yAxisId="right" orientation="right" label={{ value: 'Count', angle: 90, position: 'insideRight' }} />
           <Tooltip
             formatter={(value, name) => {
-              if (name.includes('min')) {
+              if (name.includes('Tercepat') || name.includes('Terlama')) {
                 const minutes = Math.floor(value);
                 const seconds = Math.round((value - minutes) * 60);
                 return `${minutes} menit ${seconds} detik`;
