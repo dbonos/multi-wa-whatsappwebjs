@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS skip_messages (
     INDEX idx_is_active (is_active),
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Add index for faster lookups
 CREATE INDEX idx_skip_lookup ON skip_messages(session_id, type, is_active, group_id, contact_id, phone_number);
