@@ -34,7 +34,7 @@ pool.getConnection()
         // Set MySQL session timezone to WIB
         try {
             await connection.query("SET time_zone = '+07:00'");
-            const [rows] = await connection.query("SELECT NOW() as current_time, @@session.time_zone as timezone");
+            const [rows] = await connection.query("SELECT NOW() as current_time, @@session.time_zone as timezone FROM DUAL");
             if (rows && rows[0]) {
                 console.log(`✅ Database timezone set to WIB (UTC+7) - Current DB time: ${rows[0].current_time}, Timezone: ${rows[0].timezone}`);
             } else {
