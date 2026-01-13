@@ -58,7 +58,11 @@ pool.execute = async function(sql, params) {
         // This ensures CURRENT_TIMESTAMP in INSERT/UPDATE uses WIB
         // Affects: created_at, updated_at, deleted_at, retracted_at, webhook_sent_at, 
         //          connected_at, last_activity, qr_expires_at, completed_at, sent_at, etc.
+        // Use CONVERT_TZ or SET time_zone - SET time_zone is more reliable
         await connection.query("SET time_zone = '+07:00'");
+        // Verify timezone was set (for debugging)
+        // const [tzCheck] = await connection.query("SELECT @@session.time_zone as tz");
+        // console.log(`🔍 [DB] Timezone set to: ${tzCheck[0]?.tz || 'unknown'}`);
         const result = await connection.execute(sql, params);
         return result;
     } finally {

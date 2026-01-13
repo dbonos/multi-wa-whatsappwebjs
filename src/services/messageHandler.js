@@ -859,17 +859,25 @@ class MessageHandler {
             // Update message status
             if (type === 'retracted') {
                 await pool.execute(
-                    `UPDATE messages 
-                    SET is_retracted = TRUE, retracted_at = FROM_UNIXTIME(?), updated_at = CURRENT_TIMESTAMP
-                    WHERE message_id = ?`,
-                    [timestamp, messageId]
+                    // Use FROM_UNIXTIME with timezone conversion: add 7 hours (25200 seconds) for WIB
+                    // FROM_UNIXTIME returns UTC, so we add 7 hours to get WIB
+                    await pool.execute(
+                        `UPDATE messages 
+                        SET is_retracted = TRUE, retracted_at = FROM_UNIXTIME(? + 25200), updated_at = CURRENT_TIMESTAMP
+                        WHERE message_id = ?`,
+                        [timestamp, messageId]
+                    )
                 );
             } else {
                 await pool.execute(
-                    `UPDATE messages 
-                    SET is_deleted = TRUE, deleted_at = FROM_UNIXTIME(?), updated_at = CURRENT_TIMESTAMP
-                    WHERE message_id = ?`,
-                    [timestamp, messageId]
+                    // Use FROM_UNIXTIME with timezone conversion: add 7 hours (25200 seconds) for WIB
+                    // FROM_UNIXTIME returns UTC, so we add 7 hours to get WIB
+                    await pool.execute(
+                        `UPDATE messages 
+                        SET is_deleted = TRUE, deleted_at = FROM_UNIXTIME(? + 25200), updated_at = CURRENT_TIMESTAMP
+                        WHERE message_id = ?`,
+                        [timestamp, messageId]
+                    )
                 );
             }
 
