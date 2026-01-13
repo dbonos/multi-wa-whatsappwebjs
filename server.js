@@ -2306,21 +2306,32 @@ function createClient(sessionId) {
     client.on('message', async (message) => {
         try {
             // Log for security audit - verify sessionId is correct
-            console.log(`📨 [INCOMING MESSAGE] Session: ${sessionId}, Message ID: ${message.id._serialized}`);
+            console.log(`📨 [INCOMING MESSAGE] Session: ${sessionId}, Message ID: ${message.id._serialized}, From: ${message.from}`);
             
             // Auto-save message dengan @lid conversion (will skip if in skip list)
             // sessionId is from closure - guaranteed to be correct for this client
             const result = await messageHandler.saveIncomingMessage(sessionId, message);
 
-            // Only emit via WebSocket if message was not skipped
+            // Check result
+            if (!result) {
+                console.error(`❌ [INCOMING MESSAGE] saveIncomingMessage returned null/undefined for message: ${message.id._serialized}`);
+            } else if (result.skipped) {
+                console.log(`⏭️ [INCOMING MESSAGE] Message skipped, not emitting: ${message.id._serialized}`);
+            } else if (result.success === false) {
+                console.error(`❌ [INCOMING MESSAGE] Message save failed: ${result.error || 'Unknown error'}`);
+            } else if (result.success === true || result.insertId) {
+                console.log(`✅ [INCOMING MESSAGE] Message saved successfully, insertId: ${result.insertId}`);
+            }
+
+            // Only emit via WebSocket if message was saved successfully (not skipped, not failed)
             // (Skipped messages are not saved but can still be emitted if needed)
-            if (!result || !result.skipped) {
-            socketHandler.emitNewMessage(sessionId, {
-                id: message.id._serialized,
-                body: message.body,
-                from: message.from,
-                timestamp: message.timestamp
-            });
+            if (result && !result.skipped && (result.success !== false)) {
+                socketHandler.emitNewMessage(sessionId, {
+                    id: message.id._serialized,
+                    body: message.body,
+                    from: message.from,
+                    timestamp: message.timestamp
+                });
             }
 
             // Update last activity
@@ -2329,7 +2340,8 @@ function createClient(sessionId) {
                 [sessionId]
             );
         } catch (error) {
-            console.error(`Error handling message for ${sessionId}:`, error);
+            console.error(`❌ [INCOMING MESSAGE] Error handling message for ${sessionId}:`, error);
+            console.error(`❌ [INCOMING MESSAGE] Error stack:`, error.stack);
         }
     });
 
