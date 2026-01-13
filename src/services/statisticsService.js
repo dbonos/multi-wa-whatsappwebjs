@@ -229,8 +229,7 @@ class StatisticsService {
                     periodCustomers[periodIndex] = {
                         newCustomers: new Set(),
                         previousCustomers: new Set(),
-                        customerReplies: new Map(), // from_number -> responseTimeSeconds
-                        customerUnreplied: new Set() // from_number
+                        customerReplies: new Map() // from_number -> responseTimeSeconds (fastest reply)
                     };
                 }
 
@@ -270,14 +269,10 @@ class StatisticsService {
                         if (!existingTime || responseTimeSeconds < existingTime) {
                             periodCustomers[periodIndex].customerReplies.set(incomingMsg.from_number, responseTimeSeconds);
                         }
-                    } else {
-                        // Message replied but outside 24 hours window - mark as unreplied
-                        periodCustomers[periodIndex].customerUnreplied.add(incomingMsg.from_number);
                     }
-                } else {
-                    // No reply found - mark as unreplied
-                    periodCustomers[periodIndex].customerUnreplied.add(incomingMsg.from_number);
+                    // If reply is outside 24 hours, don't count it (customer will be counted as unreplied)
                 }
+                // If no reply found, customer will be counted as unreplied (not in customerReplies map)
             }
             
             // Now calculate statistics per period based on unique customers
