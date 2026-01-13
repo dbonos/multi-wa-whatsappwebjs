@@ -1655,9 +1655,13 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'sessionId is required' });
         }
         
-        // Get all groups from contacts
-        // Note: is_group might be stored as BOOLEAN (0/1) or TRUE/FALSE
-        const [groups] = await pool.execute(
+        const client = clients.get(targetSessionId);
+        if (!client) {
+            return res.status(404).json({ error: 'Session not found or not ready' });
+        }
+        
+        // Get groups from database (contacts that have messages)
+        const [dbGroups] = await pool.execute(
             `SELECT DISTINCT 
                 c.contact_id as group_id,
                 c.name,
@@ -1672,7 +1676,39 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             [targetSessionId]
         );
         
-        console.log(`📋 [SKIP GROUPS] Found ${groups.length} groups for session ${targetSessionId}`);
+        console.log(`📋 [SKIP GROUPS] Found ${dbGroups.length} groups from database`);
+        
+        // Also get groups directly from WhatsApp client
+        let clientGroups = [];
+        try {
+            const chats = await client.getChats();
+            const groups = chats.filter(chat => chat.isGroup);
+            console.log(`📋 [SKIP GROUPS] Found ${groups.length} groups from WhatsApp client`);
+            
+            // Convert to same format and merge with database groups
+            for (const group of groups) {
+                const groupId = group.id._serialized;
+                // Check if already in dbGroups
+                const existingGroup = dbGroups.find(g => g.group_id === groupId);
+                if (!existingGroup) {
+                    // Add group from client that's not in database yet
+                    clientGroups.push({
+                        group_id: groupId,
+                        name: group.name || null,
+                        pushname: group.name || null,
+                        message_count: 0,
+                        last_message_time: null
+                    });
+                }
+            }
+        } catch (clientError) {
+            console.error(`⚠️ [SKIP GROUPS] Error getting groups from client:`, clientError.message);
+            // Continue with database groups only
+        }
+        
+        // Merge database groups and client groups
+        const allGroups = [...dbGroups, ...clientGroups];
+        console.log(`📋 [SKIP GROUPS] Total ${allGroups.length} groups (${dbGroups.length} from DB, ${clientGroups.length} from client)`);
         
         // Get which groups are already in skip list
         const [skipGroups] = await pool.execute(
@@ -1685,7 +1721,7 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
         console.log(`📋 [SKIP GROUPS] Found ${skipGroups.length} groups already in skip list`);
         
         // Add skip status to each group
-        const groupsWithSkipStatus = groups.map(group => ({
+        const groupsWithSkipStatus = allGroups.map(group => ({
             ...group,
             is_skipped: skippedGroupIds.has(group.group_id)
         }));
