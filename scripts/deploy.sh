@@ -10,6 +10,16 @@ echo "🚀 Starting deployment..."
 echo "📥 Pulling latest code from GitHub..."
 git pull origin main
 
+# Run database migration for statistics tables
+echo "🗄️  Running database migration..."
+if [ -f "database/migrations/create_statistics_tables.sql" ]; then
+    mysql -u root -p${MYSQL_PASSWORD:-} wa_manager < database/migrations/create_statistics_tables.sql 2>/dev/null || {
+        echo "⚠️  Migration might have failed or tables already exist. Continuing..."
+    }
+else
+    echo "⚠️  Migration file not found. Skipping..."
+fi
+
 # Install/update backend dependencies
 echo "📦 Installing backend dependencies..."
 npm install
