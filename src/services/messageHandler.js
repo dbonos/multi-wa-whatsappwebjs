@@ -508,7 +508,7 @@ class MessageHandler {
                     message.id._serialized,
                     finalFromNumber,
                     null, // to_number for incoming
-                    contactId,
+                    finalContactId, // Use finalContactId (after @lid conversion)
                     messageType,
                     message.body || caption || '',
                     caption,
