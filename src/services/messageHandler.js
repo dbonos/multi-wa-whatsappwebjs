@@ -42,15 +42,26 @@ class MessageHandler {
                 // This will be handled by the calling function
             }
 
+            // Get profile picture URL if available
+            let profilePictureUrl = null;
+            try {
+                if (contact.getProfilePicUrl) {
+                    profilePictureUrl = await contact.getProfilePicUrl();
+                }
+            } catch (err) {
+                // Profile picture not available or error - ignore
+            }
+            
             // Save or update contact
             const [result] = await pool.execute(
                 `INSERT INTO contacts 
-                (session_id, contact_id, phone_number, name, pushname, is_business, is_my_contact, is_group, lid_original)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (session_id, contact_id, phone_number, name, pushname, is_business, is_my_contact, is_group, lid_original, profile_pic_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                 phone_number = COALESCE(?, phone_number),
                 name = COALESCE(?, name),
                 pushname = COALESCE(?, pushname),
+                profile_pic_url = COALESCE(?, profile_pic_url),
                 updated_at = CURRENT_TIMESTAMP`,
                 [
                     sessionId, contactId, phoneNumber,
@@ -60,9 +71,11 @@ class MessageHandler {
                     contact.isMyContact || false,
                     contact.isGroup || false,
                     lidOriginal,
+                    profilePictureUrl,
                     phoneNumber, // For ON DUPLICATE KEY UPDATE
                     contact.name || null,
-                    contact.pushname || null
+                    contact.pushname || null,
+                    profilePictureUrl
                 ]
             );
 
