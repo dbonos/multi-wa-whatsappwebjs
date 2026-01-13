@@ -215,10 +215,13 @@ class MessageHandler {
             }
 
             // Save message
-            const [result] = await pool.execute(
+            // Use INSERT IGNORE or ON DUPLICATE KEY UPDATE to handle duplicate message_id
+            let [result] = await pool.execute(
                 `INSERT INTO messages 
                 (session_id, message_id, from_number, to_number, contact_id, direction, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path)
-                VALUES (?, ?, ?, ?, ?, 'incoming', ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, 'incoming', ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                updated_at = CURRENT_TIMESTAMP`,
                 [
                     sessionId,
                     message.id._serialized,
@@ -236,6 +239,19 @@ class MessageHandler {
                     attachmentPath
                 ]
             );
+            
+            // If ON DUPLICATE KEY UPDATE was used, result.insertId will be 0
+            // We need to get the existing message ID
+            if (result.insertId === 0) {
+                console.log(`ℹ️ [MESSAGE HANDLER] Message already exists in database: ${message.id._serialized}`);
+                const [existing] = await pool.execute(
+                    `SELECT id FROM messages WHERE message_id = ? LIMIT 1`,
+                    [message.id._serialized]
+                );
+                if (existing.length > 0) {
+                    result.insertId = existing[0].id;
+                }
+            }
 
             // Save reply relationship if exists
             if (replyToMessageId) {
