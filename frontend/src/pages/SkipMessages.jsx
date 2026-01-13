@@ -111,28 +111,19 @@ export default function SkipMessages() {
 
   const handleToggleGroup = async (group) => {
     try {
-      if (group.is_skipped) {
-        // Find and delete skip rule
-        const skipRule = skipList.find(s => s.group_id === group.group_id && s.type === 'group');
-        if (skipRule) {
-          await skipMessagesAPI.delete(skipRule.id);
-          toast.success('Group removed from skip list');
-        }
-      } else {
-        // Add to skip list
-        await skipMessagesAPI.add({
-          sessionId: selectedSession,
-          type: 'group',
-          groupId: group.group_id,
-          name: group.name || group.pushname || 'Group',
-        });
-        toast.success('Group added to skip list');
-      }
+      // Add to skip list (groups shown here are not yet skipped)
+      await skipMessagesAPI.add({
+        sessionId: selectedSession,
+        type: 'group',
+        groupId: group.group_id,
+        name: group.name || group.pushname || 'Group',
+      });
+      toast.success('Group added to skip list');
       await loadSkipList();
-      await loadGroups();
+      await loadGroups(); // Reload to remove from list
     } catch (error) {
-      console.error('Error toggling group:', error);
-      toast.error(error.response?.data?.error || 'Failed to toggle group');
+      console.error('Error adding group to skip list:', error);
+      toast.error(error.response?.data?.error || 'Failed to add group to skip list');
     }
   };
 
@@ -430,13 +421,15 @@ export default function SkipMessages() {
               <CardHeader>
                 <CardTitle>WhatsApp Groups</CardTitle>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Toggle to skip saving messages from groups
+                  Select groups to skip saving messages (only shows groups not yet skipped)
                 </p>
               </CardHeader>
               <CardContent>
                 {filteredGroups.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
-                    No groups found
+                    {skipList.filter(s => s.type === 'group' && s.is_active).length > 0 
+                      ? 'All groups are already in skip list' 
+                      : 'No groups found'}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -449,9 +442,6 @@ export default function SkipMessages() {
                           <div className="flex items-center gap-2 mb-1">
                             <Users className="w-4 h-4 text-gray-500" />
                             <span className="font-medium">{group.name || group.pushname || 'Group'}</span>
-                            {group.is_skipped && (
-                              <Badge variant="destructive">Skipped</Badge>
-                            )}
                           </div>
                           <p className="text-xs text-gray-400 dark:text-gray-500">
                             {group.message_count || 0} messages • Last: {group.last_message_time ? new Date(group.last_message_time * 1000).toLocaleString('id-ID', {
@@ -468,13 +458,9 @@ export default function SkipMessages() {
                         </div>
                         <button
                           onClick={() => handleToggleGroup(group)}
-                          className={`px-4 py-2 rounded-lg transition-colors ${
-                            group.is_skipped
-                              ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                          }`}
+                          className="px-4 py-2 rounded-lg transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                         >
-                          {group.is_skipped ? 'Remove from Skip' : 'Skip Messages'}
+                          Skip Messages
                         </button>
                       </div>
                     ))}

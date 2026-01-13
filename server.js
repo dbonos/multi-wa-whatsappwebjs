@@ -1922,13 +1922,13 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
         
         console.log(`📋 [SKIP GROUPS] Found ${skipGroups.length} groups already in skip list`);
         
-        // Add skip status to each group
-        const groupsWithSkipStatus = allGroups.map(group => ({
-            ...group,
-            is_skipped: skippedGroupIds.has(group.group_id)
-        }));
+        // Filter out groups that are already in skip list
+        // Only show groups that are NOT skipped
+        const availableGroups = allGroups.filter(group => !skippedGroupIds.has(group.group_id));
         
-        res.json({ success: true, groups: groupsWithSkipStatus });
+        console.log(`📋 [SKIP GROUPS] Returning ${availableGroups.length} available groups (${allGroups.length - availableGroups.length} already skipped)`);
+        
+        res.json({ success: true, groups: availableGroups });
     } catch (error) {
         console.error('Error getting groups:', error);
         res.status(500).json({ error: error.message });
