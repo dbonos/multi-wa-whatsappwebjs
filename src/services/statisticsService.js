@@ -195,7 +195,7 @@ class StatisticsService {
                     avg_response_time_minutes: 0,
                     unreplied_count: 0
                 },
-                previous_message: {
+                previous_customer: {
                     response_times: [],
                     count: 0,
                     avg_response_time_seconds: 0,
@@ -246,7 +246,7 @@ class StatisticsService {
                 }
 
                 const stat = statistics[periodIndex];
-                const category = isNew ? stat.new_customer : stat.previous_message;
+                const category = isNew ? stat.new_customer : stat.previous_customer;
 
                 if (replies.length > 0) {
                     const reply = replies[0];
@@ -268,7 +268,7 @@ class StatisticsService {
 
             // Calculate averages
             statistics.forEach((stat, periodIdx) => {
-                ['new_customer', 'previous_message'].forEach(category => {
+                ['new_customer', 'previous_customer'].forEach(category => {
                     const data = stat[category];
                     if (data.count > 0) {
                         const sum = data.response_times.reduce((a, b) => a + b, 0);
@@ -335,20 +335,20 @@ class StatisticsService {
                 message += `   ⚠️ Tidak dibalas: ${stat.new_customer.unreplied_count} customer\n`;
             }
 
-            // Previous Message
-            if (stat.previous_message.count > 0) {
-                const minutes = Math.floor(stat.previous_message.avg_response_time_seconds / 60);
-                const seconds = stat.previous_message.avg_response_time_seconds % 60;
-                message += `💬 Previous Message:\n`;
+            // Previous Customer
+            if (stat.previous_customer.count > 0) {
+                const minutes = Math.floor(stat.previous_customer.avg_response_time_seconds / 60);
+                const seconds = stat.previous_customer.avg_response_time_seconds % 60;
+                message += `💬 Previous Customer:\n`;
                 message += `   • Rata-rata: ${minutes} menit ${seconds} detik\n`;
-                message += `   • Jumlah: ${stat.previous_message.count} customer\n`;
+                message += `   • Jumlah: ${stat.previous_customer.count} customer\n`;
             } else {
-                message += `💬 Previous Message: Tidak ada data\n`;
+                message += `💬 Previous Customer: Tidak ada data\n`;
             }
             
-            // Previous Message - Unreplied
-            if (stat.previous_message.unreplied_count > 0) {
-                message += `   ⚠️ Tidak dibalas: ${stat.previous_message.unreplied_count} customer\n`;
+            // Previous Customer - Unreplied
+            if (stat.previous_customer.unreplied_count > 0) {
+                message += `   ⚠️ Tidak dibalas: ${stat.previous_customer.unreplied_count} customer\n`;
             }
 
             message += `\n`;

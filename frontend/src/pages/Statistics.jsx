@@ -285,30 +285,30 @@ export default function Statistics() {
                       </div>
                     </div>
 
-                    {/* Previous Message */}
+                    {/* Previous Customer */}
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <MessageSquare className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm font-medium">Previous Message</span>
+                        <Users className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm font-medium">Previous Customer</span>
                       </div>
                       <div className="pl-6 space-y-1">
                         <div className="flex items-center gap-2">
                           <Clock className="w-3 h-3 text-gray-400" />
                           <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Rata-rata: {formatTime(stat.previous_message?.avg_response_time_seconds || 0)}
+                            Rata-rata: {formatTime(stat.previous_customer?.avg_response_time_seconds || 0)}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <MessageSquare className="w-3 h-3 text-gray-400" />
                           <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Jumlah: {stat.previous_message?.count || 0} customer
+                            Jumlah: {stat.previous_customer?.count || 0} customer
                           </span>
                         </div>
-                        {stat.previous_message?.unreplied_count > 0 && (
+                        {stat.previous_customer?.unreplied_count > 0 && (
                           <div className="flex items-center gap-2">
                             <AlertCircle className="w-3 h-3 text-red-500" />
                             <span className="text-sm text-red-600 dark:text-red-400">
-                              Tidak dibalas: {stat.previous_message.unreplied_count} customer
+                              Tidak dibalas: {stat.previous_customer.unreplied_count} customer
                             </span>
                           </div>
                         )}
