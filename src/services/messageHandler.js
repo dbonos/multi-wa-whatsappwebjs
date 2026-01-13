@@ -138,6 +138,9 @@ class MessageHandler {
             // Save contact first (with @lid conversion)
             const contactInfo = await this.saveContact(sessionId, contact);
             
+            // Update fromNumber with contactInfo if available
+            const finalFromNumber = contactInfo?.phoneNumber || fromNumber;
+            
             // Determine message type
             let messageType = 'text';
             let attachmentPath = null;
@@ -156,21 +159,6 @@ class MessageHandler {
                 // Save attachment
                 attachmentPath = await this.saveAttachment(sessionId, message.id._serialized, media, messageType);
                 caption = message.body || null;
-            }
-
-            // Extract phone numbers
-            const fromNumber = contactInfo?.phoneNumber || contact.number || null;
-            const contactId = contact.id._serialized;
-            
-            // Check if this is a group
-            const isGroup = chat.isGroup || false;
-            
-            // Check if message should be skipped
-            const shouldSkip = await this.shouldSkipMessage(sessionId, contactId, fromNumber, isGroup);
-            if (shouldSkip) {
-                console.log(`⏭️  [SKIP] Message skipped (not saved to database): ${message.id._serialized} from ${isGroup ? 'group' : 'contact'} ${contactId}`);
-                // Still emit via WebSocket for real-time, but don't save to DB
-                return { skipped: true, messageId: message.id._serialized };
             }
 
             // Check if message is a reply
@@ -194,7 +182,7 @@ class MessageHandler {
                 [
                     sessionId,
                     message.id._serialized,
-                    fromNumber,
+                    finalFromNumber,
                     null, // to_number for incoming
                     contactId,
                     messageType,

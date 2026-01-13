@@ -686,10 +686,10 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         // For FormData: multer populates req.body and req.files
         // For JSON: express.json() populates req.body
         // multer.none() and multer.any() both return fields as strings in req.body
-        const sessionId = req.body?.sessionId;
-        const phone = req.body?.phone;
-        const message = req.body?.message;
-        const caption = req.body?.caption;
+        const sessionId = req.body?.sessionId?.trim();
+        const phone = req.body?.phone?.trim();
+        const message = req.body?.message?.trim();
+        const caption = req.body?.caption?.trim() || null; // Explicitly handle caption
         
         // Handle files - multer.fields() returns object, multer.any() returns array
         let file = null;
@@ -1241,7 +1241,10 @@ app.post('/api/broadcast/lists', authenticate, async (req, res) => {
 // Send broadcast message
 app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async (req, res) => {
     try {
-        const { sessionId, broadcastListId, message } = req.body;
+        const sessionId = req.body?.sessionId?.trim();
+        const broadcastListId = req.body?.broadcastListId?.trim();
+        const message = req.body?.message?.trim() || null;
+        const caption = req.body?.caption?.trim() || null;
         const file = req.file;
 
         if (!sessionId || !broadcastListId) {
@@ -1298,9 +1301,16 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
 
                 if (file) {
                     const media = MessageMedia.fromFilePath(file.path);
-                    if (message) media.caption = message;
+                    // Use caption if provided, otherwise use message
+                    const mediaCaption = caption || message || null;
+                    if (mediaCaption) {
+                        media.caption = mediaCaption;
+                    }
                     sentMessage = await client.sendMessage(chatId, media);
                 } else {
+                    if (!message) {
+                        throw new Error('Message is required when no attachment');
+                    }
                     sentMessage = await client.sendMessage(chatId, message);
                 }
 
