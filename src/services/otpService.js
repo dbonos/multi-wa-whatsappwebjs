@@ -66,7 +66,7 @@ const requestOTP = async (sessionId, phoneNumber, ipAddress = null, userAgent = 
         user = users[0];
 
         // Check rate limiting (max 3 OTP requests per 15 minutes)
-        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+        const fifteenMinutesAgo = new Date(getWIBTime().getTime() - 15 * 60 * 1000);
         const [recentRequests] = await pool.execute(
             'SELECT COUNT(*) as count, MIN(created_at) as oldest_request FROM otp_requests WHERE session_id = ? AND created_at > ?',
             [sessionId, fifteenMinutesAgo]
@@ -78,7 +78,7 @@ const requestOTP = async (sessionId, phoneNumber, ipAddress = null, userAgent = 
             if (oldestRequest) {
                 const oldestRequestTime = new Date(oldestRequest);
                 const waitUntil = new Date(oldestRequestTime.getTime() + 15 * 60 * 1000);
-                const waitMinutes = Math.ceil((waitUntil - Date.now()) / (60 * 1000));
+                const waitMinutes = Math.ceil((waitUntil - getWIBTime().getTime()) / (60 * 1000));
                 
                 return { 
                     success: false, 
@@ -97,7 +97,7 @@ const requestOTP = async (sessionId, phoneNumber, ipAddress = null, userAgent = 
 
         // Generate OTP
         const otpCode = generateOTP();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        const expiresAt = new Date(getWIBTime().getTime() + 10 * 60 * 1000); // 10 minutes
 
         // Save OTP request
         await pool.execute(

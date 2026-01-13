@@ -2,6 +2,7 @@ const pool = require('../config/database');
 const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
+const { getWIBTime, getWIBTimestamp, getWIBToday, formatWIBDisplay } = require('../utils/timezone');
 
 class MessageHandler {
     constructor() {
@@ -231,7 +232,7 @@ class MessageHandler {
                     messageType,
                     message.body || caption || '',
                     caption,
-                    message.timestamp,
+                    message.timestamp || getWIBTimestamp(),
                     message.isForwarded || false,
                     message.hasQuotedMsg || false,
                     replyToMessageId,
@@ -305,7 +306,7 @@ class MessageHandler {
 
             // Determine file extension
             const ext = this.getFileExtension(media.mimetype, messageType);
-            const fileName = `${messageId}_${Date.now()}${ext}`;
+            const fileName = `${messageId}_${getWIBTimestamp()}${ext}`;
             const filePath = path.join(sessionDir, fileName);
 
             // Convert base64 to buffer and save
@@ -428,7 +429,7 @@ class MessageHandler {
                     `UPDATE message_reactions 
                     SET reaction_text = ?, timestamp = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE message_id = ? AND from_number = ? AND reaction_emoji = ?`,
-                    [reactionText, Math.floor(Date.now() / 1000), messageId, fromNumber, reactionEmoji]
+                    [reactionText, getWIBTimestamp(), messageId, fromNumber, reactionEmoji]
                 );
             } else {
                 // Insert new reaction
@@ -443,7 +444,7 @@ class MessageHandler {
                         fromContactId,
                         reactionEmoji,
                         reactionText,
-                        Math.floor(Date.now() / 1000)
+                        getWIBTimestamp()
                     ]
                 );
             }
@@ -456,7 +457,7 @@ class MessageHandler {
                     from: fromNumber,
                     emoji: reactionEmoji,
                     text: reactionText,
-                    timestamp: Math.floor(Date.now() / 1000)
+                    timestamp: getWIBTimestamp()
                 }
             });
 
@@ -471,7 +472,7 @@ class MessageHandler {
     async handleMessageRevoked(sessionId, after, before, type) {
         try {
             const messageId = after.id._serialized;
-            const timestamp = Math.floor(Date.now() / 1000);
+            const timestamp = getWIBTimestamp();
 
             // Get message info before deletion
             let messageInfo = null;

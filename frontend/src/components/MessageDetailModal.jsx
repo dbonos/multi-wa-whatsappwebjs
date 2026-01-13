@@ -58,7 +58,16 @@ export default function MessageDetailModal({ messageId, sessionId, onClose }) {
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
     const date = new Date(timestamp * 1000 || timestamp);
-    return date.toLocaleString();
+    return date.toLocaleString('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
   };
 
   if (!messageId) return null;

@@ -11,18 +11,27 @@ const pool = mysql.createPool({
     connectionLimit: 10,
     queueLimit: 0,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 0
+    keepAliveInitialDelay: 0,
+    timezone: '+07:00' // WIB (UTC+7)
 });
 
-// Test connection
+// Test connection and set timezone
 pool.getConnection()
-    .then(connection => {
+    .then(async (connection) => {
         console.log('✅ Database connected');
+        // Set MySQL session timezone to WIB
+        await connection.query("SET time_zone = '+07:00'");
         connection.release();
+        console.log('✅ Database timezone set to WIB (UTC+7)');
     })
     .catch(err => {
         console.error('❌ Database connection error:', err.message);
     });
+
+// Set timezone for all new connections
+pool.on('connection', async (connection) => {
+    await connection.query("SET time_zone = '+07:00'");
+});
 
 module.exports = pool;
 

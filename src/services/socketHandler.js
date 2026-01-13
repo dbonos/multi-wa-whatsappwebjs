@@ -1,4 +1,5 @@
 const { Server } = require('socket.io');
+const { getWIBTimestamp } = require('../utils/timezone');
 
 class SocketHandler {
     constructor(server) {
@@ -56,7 +57,7 @@ class SocketHandler {
         this.io.to(`session_${sessionId}`).emit('qr_code', {
             sessionId,
             qrCode,
-            timestamp: Date.now()
+            timestamp: getWIBTimestamp()
         });
     }
 
@@ -66,7 +67,7 @@ class SocketHandler {
             sessionId,
             status,
             ...data,
-            timestamp: Date.now()
+            timestamp: getWIBTimestamp()
         });
     }
 
@@ -75,7 +76,7 @@ class SocketHandler {
         this.io.to(`session_${sessionId}`).emit('message_status', {
             messageId,
             status,
-            timestamp: Date.now()
+            timestamp: getWIBTimestamp()
         });
     }
 
@@ -84,7 +85,7 @@ class SocketHandler {
         this.io.to(`session_${sessionId}`).emit('new_message', {
             sessionId,
             message,
-            timestamp: Date.now()
+            timestamp: getWIBTimestamp()
         });
     }
 
@@ -98,7 +99,7 @@ class SocketHandler {
                 emoji: reaction.reaction?.emoji || reaction.reaction,
                 text: reaction.reaction?.text || '',
             },
-            timestamp: Date.now()
+            timestamp: getWIBTimestamp()
         });
     }
 
@@ -108,7 +109,7 @@ class SocketHandler {
             sessionId,
             messageId: data.messageId,
             type: data.type,
-            timestamp: Date.now()
+            timestamp: getWIBTimestamp()
         });
     }
 

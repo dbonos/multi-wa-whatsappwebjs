@@ -1,4 +1,8 @@
 require('dotenv').config();
+
+// Set timezone to WIB (Asia/Jakarta, UTC+7)
+process.env.TZ = 'Asia/Jakarta';
+
 const express = require('express');
 const http = require('http');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -17,6 +21,7 @@ const messageHandler = require('./src/services/messageHandler');
 const { authenticate, requireAdmin, requireUser, requireSessionOwner, generateToken } = require('./src/middleware/auth');
 const SocketHandler = require('./src/services/socketHandler');
 const otpService = require('./src/services/otpService');
+const { getWIBTime, getWIBTimestamp, getWIBToday, formatWIBDisplay, toWIBISOString } = require('./src/utils/timezone');
 
 const app = express();
 const server = http.createServer(app);
@@ -518,7 +523,7 @@ app.get('/api/sessions/:sessionId/qr', authenticate, async (req, res) => {
         
         const expiresAt = sessions.length > 0 && sessions[0].qr_expires_at 
             ? new Date(sessions[0].qr_expires_at).toISOString()
-            : new Date(Date.now() + 20000).toISOString();
+            : toWIBISOString(new Date(getWIBTime().getTime() + 20000));
 
         // Generate QR code image
         const qrImage = await qrcode.toDataURL(qrCode);
@@ -672,13 +677,13 @@ app.get('/api/sessions/:sessionId/status', authenticate, async (req, res) => {
 const storage = multer.diskStorage({
     destination: async (req, file, cb) => {
         const sessionId = req.body.sessionId || 'default';
-        const today = new Date().toISOString().split('T')[0];
+        const today = getWIBToday();
         const uploadDir = path.join(process.env.ATTACHMENTS_DIR || './attachments', today, sessionId);
         await fs.mkdir(uploadDir, { recursive: true });
         cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
-        const uniqueName = `${Date.now()}_${file.originalname}`;
+        const uniqueName = `${getWIBTimestamp()}_${file.originalname}`;
         cb(null, uniqueName);
     }
 });
@@ -711,7 +716,8 @@ const uploadWithFields = multer({
 app.post('/api/messages/send', authenticate, (req, res, next) => {
     console.log(`\n🚀🚀🚀 [SERVER] ==========================================`);
     console.log(`🚀 [SERVER] POST /api/messages/send - REQUEST RECEIVED`);
-    console.log(`🚀 [SERVER] Timestamp: ${new Date().toISOString()}`);
+    console.log(`🚀 [SERVER] Started at: ${formatWIBDisplay(getWIBTime())} (WIB)`);
+    console.log(`🚀 [SERVER] Timezone: ${process.env.TZ || 'UTC'}`);
     console.log(`🚀 [SERVER] ==========================================\n`);
     
     const contentType = req.headers['content-type'] || '';
@@ -1002,7 +1008,7 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 file ? (caption || message || '') : (message || ''),
                 // Caption field: only set if there's attachment and caption exists
                 file ? (caption || message || null) : null,
-                Math.floor(Date.now() / 1000),
+                getWIBTimestamp(),
                 file ? file.path : null
             ]
         );
@@ -2326,12 +2332,12 @@ function createClient(sessionId) {
             // Only emit via WebSocket if message was saved successfully (not skipped, not failed)
             // (Skipped messages are not saved but can still be emitted if needed)
             if (result && !result.skipped && (result.success !== false)) {
-                socketHandler.emitNewMessage(sessionId, {
-                    id: message.id._serialized,
-                    body: message.body,
-                    from: message.from,
-                    timestamp: message.timestamp
-                });
+            socketHandler.emitNewMessage(sessionId, {
+                id: message.id._serialized,
+                body: message.body,
+                from: message.from,
+                timestamp: message.timestamp
+            });
             }
 
             // Update last activity
