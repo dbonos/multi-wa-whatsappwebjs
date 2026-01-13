@@ -438,9 +438,12 @@ class StatisticsService {
                 if (stat.previous_customer.fastest_response_time_seconds > 0) {
                     const fastestMin = Math.floor(stat.previous_customer.fastest_response_time_seconds / 60);
                     const fastestSec = stat.previous_customer.fastest_response_time_seconds % 60;
+                    const avgMin = Math.floor(stat.previous_customer.avg_response_time_seconds / 60);
+                    const avgSec = stat.previous_customer.avg_response_time_seconds % 60;
                     const slowestMin = Math.floor(stat.previous_customer.slowest_response_time_seconds / 60);
                     const slowestSec = stat.previous_customer.slowest_response_time_seconds % 60;
                     message += `   • Tercepat: ${fastestMin} menit ${fastestSec} detik\n`;
+                    message += `   • Rata-rata: ${avgMin} menit ${avgSec} detik\n`;
                     message += `   • Terlama: ${slowestMin} menit ${slowestSec} detik\n`;
                 }
             } else {

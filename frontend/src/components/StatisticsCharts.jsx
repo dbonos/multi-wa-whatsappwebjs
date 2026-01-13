@@ -90,8 +90,12 @@ export function PeriodComparisonChart({ data, periods }) {
     const stat = data[index] || {};
     return {
       period: period.label,
-      'New Customer (min)': stat.new_customer?.avg_response_time_minutes || 0,
-      'Previous Customer (min)': stat.previous_customer?.avg_response_time_minutes || 0,
+      'New Customer (Tercepat)': stat.new_customer?.fastest_response_time_minutes || 0,
+      'New Customer (Rata-rata)': stat.new_customer?.avg_response_time_minutes || 0,
+      'New Customer (Terlama)': stat.new_customer?.slowest_response_time_minutes || 0,
+      'Previous Customer (Tercepat)': stat.previous_customer?.fastest_response_time_minutes || 0,
+      'Previous Customer (Rata-rata)': stat.previous_customer?.avg_response_time_minutes || 0,
+      'Previous Customer (Terlama)': stat.previous_customer?.slowest_response_time_minutes || 0,
       'New Customer Count': stat.new_customer?.count || 0,
       'Previous Customer Count': stat.previous_customer?.count || 0,
       'New Customer (Tidak Dibalas)': stat.new_customer?.unreplied_count || 0,
