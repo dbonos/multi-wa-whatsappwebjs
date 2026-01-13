@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { sessionsAPI } from '../services/api';
 import socketService from '../services/socket';
 import SessionCard from '../components/SessionCard';
+import WebhookSettings from '../components/WebhookSettings';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Loader2, RefreshCw, Search } from 'lucide-react';
+import { Plus, Loader2, RefreshCw, Search, Link as LinkIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Dashboard() {
@@ -14,6 +15,7 @@ export default function Dashboard() {
   const [newSessionId, setNewSessionId] = useState('');
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSessionForWebhook, setSelectedSessionForWebhook] = useState(null);
 
   useEffect(() => {
     socketService.connect();
@@ -229,12 +231,41 @@ export default function Dashboard() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.2 }}
+                className="space-y-4"
               >
                 <SessionCard
                   session={session}
                   onDelete={handleDelete}
                   onRefresh={loadSessions}
                 />
+                {isAdmin && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="card"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        onClick={() => setSelectedSessionForWebhook(
+                          selectedSessionForWebhook === session.session_id ? null : session.session_id
+                        )}
+                        className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-whatsapp transition-colors"
+                      >
+                        <LinkIcon className="w-4 h-4" />
+                        Webhook Settings
+                      </button>
+                    </div>
+                    {selectedSessionForWebhook === session.session_id && (
+                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <WebhookSettings
+                          sessionId={session.session_id}
+                          onClose={() => setSelectedSessionForWebhook(null)}
+                        />
+                      </div>
+                    )}
+                  </motion.div>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>

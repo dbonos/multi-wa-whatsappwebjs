@@ -2108,9 +2108,26 @@ app.get('/api/webhooks', authenticate, async (req, res) => {
             params.push(sessionId);
         }
 
+        // Non-admin users can only see webhooks for their own session
+        if (req.user.role !== 'admin') {
+            if (sessionId && sessionId !== req.user.session_id) {
+                return res.status(403).json({ error: 'You can only view webhooks for your own session' });
+            }
+            query += sessionId ? ' AND session_id = ?' : ' WHERE session_id = ?';
+            params.push(req.user.session_id);
+        }
+
+        query += ' ORDER BY created_at DESC';
+
         const [webhooks] = await pool.execute(query, params);
 
-        res.json({ success: true, webhooks });
+        // Parse JSON events field
+        const webhooksWithParsedEvents = webhooks.map(webhook => ({
+            ...webhook,
+            events: webhook.events ? (typeof webhook.events === 'string' ? JSON.parse(webhook.events) : webhook.events) : ['message']
+        }));
+
+        res.json({ success: true, webhooks: webhooksWithParsedEvents });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -2125,10 +2142,20 @@ app.post('/api/webhooks', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'webhookUrl is required' });
         }
 
+        // Validate URL format
+        try {
+            new URL(webhookUrl);
+        } catch (urlError) {
+            return res.status(400).json({ error: 'Invalid webhook URL format' });
+        }
+
+        // Non-admin users can only create webhooks for their own session
+        const targetSessionId = req.user.role === 'admin' ? (sessionId || null) : req.user.session_id;
+
         const [result] = await pool.execute(
             `INSERT INTO webhooks (session_id, webhook_url, events, is_active)
              VALUES (?, ?, ?, TRUE)`,
-            [sessionId || null, webhookUrl, JSON.stringify(events || ['message'])]
+            [targetSessionId, webhookUrl, JSON.stringify(events || ['message'])]
         );
 
         res.json({
@@ -2146,6 +2173,28 @@ app.put('/api/webhooks/:id', authenticate, async (req, res) => {
     try {
         const { id } = req.params;
         const { webhookUrl, events, isActive } = req.body;
+
+        // Get webhook first to check permissions
+        const [webhooks] = await pool.execute('SELECT * FROM webhooks WHERE id = ?', [id]);
+        if (webhooks.length === 0) {
+            return res.status(404).json({ error: 'Webhook not found' });
+        }
+
+        const webhook = webhooks[0];
+
+        // Non-admin users can only update webhooks for their own session
+        if (req.user.role !== 'admin' && webhook.session_id !== req.user.session_id) {
+            return res.status(403).json({ error: 'You can only update webhooks for your own session' });
+        }
+
+        // Validate URL format if provided
+        if (webhookUrl) {
+            try {
+                new URL(webhookUrl);
+            } catch (urlError) {
+                return res.status(400).json({ error: 'Invalid webhook URL format' });
+            }
+        }
 
         await pool.execute(
             `UPDATE webhooks 
@@ -2172,6 +2221,19 @@ app.put('/api/webhooks/:id', authenticate, async (req, res) => {
 app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
     try {
         const { id } = req.params;
+
+        // Get webhook first to check permissions
+        const [webhooks] = await pool.execute('SELECT * FROM webhooks WHERE id = ?', [id]);
+        if (webhooks.length === 0) {
+            return res.status(404).json({ error: 'Webhook not found' });
+        }
+
+        const webhook = webhooks[0];
+
+        // Non-admin users can only delete webhooks for their own session
+        if (req.user.role !== 'admin' && webhook.session_id !== req.user.session_id) {
+            return res.status(403).json({ error: 'You can only delete webhooks for your own session' });
+        }
 
         await pool.execute('DELETE FROM webhooks WHERE id = ?', [id]);
 
