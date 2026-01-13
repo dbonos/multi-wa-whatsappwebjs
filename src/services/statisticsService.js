@@ -1,5 +1,5 @@
 const pool = require('../config/database');
-const { getWIBTimestamp, convertUTCToWIBTimestamp } = require('../utils/timezone');
+const { getWIBTimestamp, convertUTCToWIBTimestamp, timestampToWIB } = require('../utils/timezone');
 
 class StatisticsService {
     /**
@@ -89,14 +89,19 @@ class StatisticsService {
         try {
             const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
             
+            // Timestamp in database is already in WIB, so no need to add 25200
+            // Convert date to timestamp range for comparison
+            const dateObj = new Date(dateStr + 'T00:00:00+07:00'); // WIB timezone
+            const dateStartWIB = Math.floor(dateObj.getTime() / 1000);
+            
             const [messages] = await pool.execute(
                 `SELECT id FROM messages 
                 WHERE session_id = ? 
                 AND contact_id = ? 
                 AND direction = 'incoming'
-                AND DATE(FROM_UNIXTIME(timestamp + 25200)) < ?
+                AND timestamp < ?
                 LIMIT 1`,
-                [sessionId, contactId, dateStr]
+                [sessionId, contactId, dateStartWIB]
             );
 
             return messages.length === 0;
@@ -113,9 +118,10 @@ class StatisticsService {
      * @returns {number|null} Period index or null if not in any period
      */
     getPeriodIndex(timestamp, periods) {
-        const date = new Date(timestamp * 1000);
-        const hours = date.getHours();
-        const minutes = date.getMinutes();
+        // Timestamp is already in WIB, convert to WIB Date object to get correct hours/minutes
+        const wibDate = timestampToWIB(timestamp * 1000);
+        const hours = wibDate.getHours();
+        const minutes = wibDate.getMinutes();
         const totalMinutes = hours * 60 + minutes;
 
         for (let i = 0; i < periods.length; i++) {
@@ -155,14 +161,22 @@ class StatisticsService {
             const periodsArray = typeof periods === 'string' ? JSON.parse(periods) : periods;
 
             // Get all incoming messages for the date
+            // Timestamp in database is already in WIB, so no need to add 25200
+            // Convert date to timestamp range for comparison
+            const dateObj = new Date(dateStr + 'T00:00:00+07:00'); // WIB timezone start
+            const dateEndObj = new Date(dateStr + 'T23:59:59+07:00'); // WIB timezone end
+            const dateStartWIB = Math.floor(dateObj.getTime() / 1000);
+            const dateEndWIB = Math.floor(dateEndObj.getTime() / 1000);
+            
             const [incomingMessages] = await pool.execute(
                 `SELECT message_id, contact_id, timestamp, from_number
                 FROM messages 
                 WHERE session_id = ? 
                 AND direction = 'incoming'
-                AND DATE(FROM_UNIXTIME(timestamp + 25200)) = ?
+                AND timestamp >= ? 
+                AND timestamp <= ?
                 ORDER BY timestamp ASC`,
-                [sessionId, dateStr]
+                [sessionId, dateStartWIB, dateEndWIB]
             );
 
             const statistics = periodsArray.map((period, index) => ({
