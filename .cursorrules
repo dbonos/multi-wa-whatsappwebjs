@@ -1,0 +1,102 @@
+# Cursor Rules for Multi WhatsApp Web Instance Manager
+
+## Code Change Workflow
+
+**IMPORTANT: Every time code is changed or edited, follow this exact sequence:**
+
+### 1. Commit to GitHub
+- Stage all changes: `git add -A`
+- Commit with descriptive message: `git commit -m "Description of changes"`
+- Push to GitHub: `git push origin main`
+
+### 2. Push to Server (Pull on Server)
+- SSH to server: `ssh -i LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171`
+- Navigate to project: `cd ~/wa-web`
+- Pull latest code: `git pull origin main`
+
+**OR use one-liner:**
+```bash
+ssh -i LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~/wa-web && git pull origin main"
+```
+
+### 3. Compile Frontend (if frontend code changed)
+**Only if changes were made to files in `frontend/` directory:**
+- SSH to server: `ssh -i LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171`
+- Navigate to frontend: `cd ~/wa-web/frontend`
+- Install dependencies (if needed): `npm install`
+- Build frontend: `npm run build`
+- Copy to public: `cd ~/wa-web && mkdir -p public && cp -r frontend/dist/* public/`
+
+**OR use one-liner:**
+```bash
+ssh -i LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~/wa-web/frontend && npm run build && cd .. && mkdir -p public && cp -r frontend/dist/* public/"
+```
+
+### 4. Restart Service
+- SSH to server: `ssh -i LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171`
+- Restart service: `sudo systemctl restart wa-web.service`
+- Check status: `sudo systemctl status wa-web.service --no-pager`
+
+**OR use one-liner:**
+```bash
+ssh -i LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "sudo systemctl restart wa-web.service && sleep 2 && sudo systemctl status wa-web.service --no-pager | head -15"
+```
+
+### 5. Update Documentation
+- Update relevant documentation files in `docs/` directory
+- If new feature: Add to `docs/features/`
+- If API change: Update `docs/api/API-DOCUMENTATION.md`
+- If deployment change: Update `docs/deployment/`
+- Commit documentation: `git add docs/ && git commit -m "Update documentation" && git push`
+
+## Quick Deployment Script
+
+For convenience, use the deployment script:
+```bash
+cd "/Users/danielbudiono/cursor_projects/multi wa whatwappwebjs"
+ssh -i LightsailDefaultKey-ap-southeast-3.pem ubuntu@108.137.37.171 "cd ~/wa-web && bash scripts/deploy.sh"
+```
+
+## Server Information
+
+- **Server IP**: 108.137.37.171
+- **SSH User**: ubuntu
+- **SSH Key**: `LightsailDefaultKey-ap-southeast-3.pem` (in project root)
+- **Project Path**: `/home/ubuntu/wa-web`
+- **Service Name**: `wa-web.service`
+
+## File Change Detection
+
+**Frontend changes** (require compilation):
+- Any file in `frontend/src/`
+- `frontend/package.json`
+- `frontend/vite.config.js`
+- `frontend/tailwind.config.js`
+
+**Backend changes** (require service restart only):
+- `server.js`
+- Any file in `src/`
+- `package.json` (root)
+- Database migrations in `database/migrations/`
+
+**Both** (require compilation + restart):
+- Changes to both frontend and backend files
+
+## Commit Message Guidelines
+
+- Use clear, descriptive commit messages
+- Include what was changed and why
+- Format: `"Action: Description of changes"`
+- Examples:
+  - `"Fix: Statistics periods refresh after settings save"`
+  - `"Add: Statistics feature with unreplied customer tracking"`
+  - `"Update: Deploy script to include database migration"`
+
+## Notes
+
+- Always verify service status after restart
+- Check logs if service fails: `sudo journalctl -u wa-web.service -n 50`
+- Frontend build takes ~10-15 seconds
+- Service restart takes ~2-3 seconds
+- Always test changes locally before deploying
+
