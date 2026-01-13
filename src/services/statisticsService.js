@@ -171,7 +171,7 @@ class StatisticsService {
             console.log(`📊 [STATISTICS] Querying messages for date ${dateStr} (WIB timestamp range: ${dateStartWIB} to ${dateEndWIB})`);
             
             const [incomingMessages] = await pool.execute(
-                `SELECT message_id, contact_id, timestamp, from_number
+                `SELECT message_id, contact_id, timestamp, from_number, to_number
                 FROM messages 
                 WHERE session_id = ? 
                 AND direction = 'incoming'
@@ -217,40 +217,32 @@ class StatisticsService {
                 // Check if new customer
                 const isNew = await this.isNewCustomer(sessionId, incomingMsg.contact_id, dateStr);
 
-                // Find first reply (outgoing, can be fromAI=1 OR fromAI=0)
-                // Try to find by reply_to_message_id first, then by quoted_msg_id, then any outgoing message to same contact
-                let [replies] = await pool.execute(
-                    `SELECT message_id, timestamp, fromAI, reply_to_message_id, quoted_msg_id
+                // Find first reply: outgoing message to the same contact after the incoming message
+                // For incoming: contact_id is the sender (individual or group)
+                // For outgoing: contact_id is the recipient (same contact_id)
+                // Simple match: incoming.contact_id = outgoing.contact_id
+                const [replies] = await pool.execute(
+                    `SELECT message_id, timestamp, fromAI, to_number, contact_id
                     FROM messages 
                     WHERE session_id = ?
                     AND direction = 'outgoing'
-                    AND (reply_to_message_id = ? OR quoted_msg_id = ?)
+                    AND contact_id = ?
                     AND timestamp > ?
+                    AND timestamp <= ?
                     ORDER BY timestamp ASC
                     LIMIT 1`,
-                    [sessionId, incomingMsg.message_id, incomingMsg.message_id, incomingMsg.timestamp]
+                    [
+                        sessionId, 
+                        incomingMsg.contact_id,  // Match by contact_id (works for both individual and group)
+                        incomingMsg.timestamp,   // After incoming message
+                        incomingMsg.timestamp + 86400  // Within 24 hours
+                    ]
                 );
                 
-                // If no reply found by reply_to_message_id or quoted_msg_id, try to find any outgoing message
-                // to the same contact after the incoming message (within 24 hours)
-                if (replies.length === 0) {
-                    const [contactMessages] = await pool.execute(
-                        `SELECT message_id, timestamp, fromAI, contact_id
-                        FROM messages 
-                        WHERE session_id = ?
-                        AND direction = 'outgoing'
-                        AND contact_id = ?
-                        AND timestamp > ?
-                        AND timestamp <= ?
-                        ORDER BY timestamp ASC
-                        LIMIT 1`,
-                        [sessionId, incomingMsg.contact_id, incomingMsg.timestamp, incomingMsg.timestamp + 86400]
-                    );
-                    
-                    if (contactMessages.length > 0) {
-                        replies = contactMessages;
-                        console.log(`📊 [STATISTICS] Found reply by contact matching for message ${incomingMsg.message_id}`);
-                    }
+                if (replies.length > 0) {
+                    console.log(`✅ [STATISTICS] Found reply for incoming message ${incomingMsg.message_id}: outgoing ${replies[0].message_id} (fromAI=${replies[0].fromAI})`);
+                } else {
+                    console.log(`⚠️ [STATISTICS] No reply found for incoming message ${incomingMsg.message_id} from contact ${incomingMsg.contact_id} (${incomingMsg.from_number})`);
                 }
 
                 const stat = statistics[periodIndex];
