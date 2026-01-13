@@ -892,6 +892,12 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             if (mediaCaption) {
                 media.caption = mediaCaption;
                 console.log(`✅ [SEND MESSAGE] Caption set on media: "${mediaCaption.substring(0, 50)}${mediaCaption.length > 50 ? '...' : ''}"`);
+                // Verify caption is actually set
+                console.log(`✅ [SEND MESSAGE] Caption verification:`, {
+                    hasCaption: !!media.caption,
+                    captionValue: media.caption || 'null',
+                    captionLength: media.caption ? media.caption.length : 0
+                });
             } else {
                 console.log(`⚠️ [SEND MESSAGE] No caption provided for attachment`);
             }
