@@ -281,5 +281,16 @@ export const skipMessagesAPI = {
   delete: (id) => api.delete(`/skip-messages/${id}`),
 };
 
+// Statistics API
+export const statisticsAPI = {
+  get: (sessionId, date) => api.get('/statistics', { params: { sessionId, date } }),
+  
+  getSettings: (sessionId) => api.get('/statistics/settings', { params: { sessionId } }),
+  
+  updateSettings: (sessionId, settings) => api.put('/statistics/settings', { sessionId, ...settings }),
+  
+  send: (sessionId, date) => api.post('/statistics/send', { sessionId, date }),
+};
+
 export default api;
 

@@ -21,6 +21,8 @@ const messageHandler = require('./src/services/messageHandler');
 const { authenticate, requireAdmin, requireUser, requireSessionOwner, generateToken } = require('./src/middleware/auth');
 const SocketHandler = require('./src/services/socketHandler');
 const otpService = require('./src/services/otpService');
+const statisticsService = require('./src/services/statisticsService');
+const SchedulerService = require('./src/services/schedulerService');
 const { getWIBTime, getWIBTimestamp, getWIBToday, formatWIBDisplay, toWIBISOString } = require('./src/utils/timezone');
 
 const app = express();
@@ -34,6 +36,9 @@ const PORT = process.env.PORT || 3000;
 const clients = new Map();
 const qrCodes = new Map(); // sessionId -> qrCode
 const sessionStatuses = new Map(); // sessionId -> status
+
+// Initialize scheduler service
+const schedulerService = new SchedulerService(clients);
 
 // Middleware
 app.use(helmet({
@@ -2247,6 +2252,220 @@ app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
 });
 
 // ============================================
+// STATISTICS API ENDPOINTS
+// ============================================
+
+// Get statistics for a date
+app.get('/api/statistics', authenticate, async (req, res) => {
+    try {
+        const { sessionId, date } = req.query;
+        
+        if (!sessionId) {
+            return res.status(400).json({ error: 'sessionId is required' });
+        }
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.session_id !== sessionId) {
+            return res.status(403).json({ error: 'You can only view statistics for your own session' });
+        }
+
+        // Default to yesterday if date not provided
+        let targetDate = date;
+        if (!targetDate) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            targetDate = yesterday.toISOString().split('T')[0];
+        }
+
+        // Get settings to get periods
+        const [settings] = await pool.execute(
+            `SELECT periods FROM statistics_settings WHERE session_id = ?`,
+            [sessionId]
+        );
+
+        let periods = statisticsService.getDefaultPeriods();
+        if (settings.length > 0 && settings[0].periods) {
+            periods = typeof settings[0].periods === 'string' 
+                ? JSON.parse(settings[0].periods) 
+                : settings[0].periods;
+        }
+
+        // Calculate statistics
+        const statistics = await statisticsService.getAllPeriodsStatistics(sessionId, targetDate, periods);
+
+        res.json({ 
+            success: true, 
+            statistics,
+            date: targetDate,
+            periods
+        });
+    } catch (error) {
+        console.error('Error getting statistics:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get statistics settings
+app.get('/api/statistics/settings', authenticate, async (req, res) => {
+    try {
+        const { sessionId } = req.query;
+        
+        if (!sessionId) {
+            return res.status(400).json({ error: 'sessionId is required' });
+        }
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.session_id !== sessionId) {
+            return res.status(403).json({ error: 'You can only view settings for your own session' });
+        }
+
+        const [settings] = await pool.execute(
+            `SELECT * FROM statistics_settings WHERE session_id = ?`,
+            [sessionId]
+        );
+
+        if (settings.length === 0) {
+            // Return default settings
+            return res.json({
+                success: true,
+                settings: {
+                    session_id: sessionId,
+                    is_enabled: false,
+                    recipient_phone: '',
+                    send_time: '08:00:00',
+                    periods: statisticsService.getDefaultPeriods()
+                }
+            });
+        }
+
+        const setting = settings[0];
+        const periods = typeof setting.periods === 'string' 
+            ? JSON.parse(setting.periods) 
+            : setting.periods;
+
+        res.json({
+            success: true,
+            settings: {
+                ...setting,
+                periods
+            }
+        });
+    } catch (error) {
+        console.error('Error getting statistics settings:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update statistics settings
+app.put('/api/statistics/settings', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { sessionId, is_enabled, recipient_phone, send_time, periods } = req.body;
+        
+        if (!sessionId) {
+            return res.status(400).json({ error: 'sessionId is required' });
+        }
+
+        // Validate periods
+        const periodsArray = periods || statisticsService.getDefaultPeriods();
+        const validation = statisticsService.validatePeriods(periodsArray);
+        if (!validation.valid) {
+            return res.status(400).json({ error: validation.error });
+        }
+
+        // Validate recipient phone if enabled
+        if (is_enabled && !recipient_phone) {
+            return res.status(400).json({ error: 'recipient_phone is required when enabled' });
+        }
+
+        // Check if settings exist
+        const [existing] = await pool.execute(
+            `SELECT id FROM statistics_settings WHERE session_id = ?`,
+            [sessionId]
+        );
+
+        const periodsJson = JSON.stringify(periodsArray);
+
+        if (existing.length > 0) {
+            // Update existing
+            await pool.execute(
+                `UPDATE statistics_settings 
+                SET is_enabled = ?, recipient_phone = ?, send_time = ?, periods = ?, updated_at = CONVERT_TZ(NOW(), '+00:00', '+07:00')
+                WHERE session_id = ?`,
+                [is_enabled || false, recipient_phone || '', send_time || '08:00:00', periodsJson, sessionId]
+            );
+        } else {
+            // Insert new
+            await pool.execute(
+                `INSERT INTO statistics_settings (session_id, is_enabled, recipient_phone, send_time, periods)
+                VALUES (?, ?, ?, ?, ?)`,
+                [sessionId, is_enabled || false, recipient_phone || '', send_time || '08:00:00', periodsJson]
+            );
+        }
+
+        res.json({ success: true, message: 'Statistics settings updated successfully' });
+    } catch (error) {
+        console.error('Error updating statistics settings:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Manual trigger to send statistics
+app.post('/api/statistics/send', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { sessionId, date } = req.body;
+        
+        if (!sessionId) {
+            return res.status(400).json({ error: 'sessionId is required' });
+        }
+
+        // Default to yesterday if date not provided
+        let targetDate = date;
+        if (!targetDate) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            targetDate = yesterday.toISOString().split('T')[0];
+        }
+
+        // Get settings
+        const [settings] = await pool.execute(
+            `SELECT * FROM statistics_settings WHERE session_id = ? AND is_enabled = TRUE`,
+            [sessionId]
+        );
+
+        if (settings.length === 0) {
+            return res.status(400).json({ error: 'Statistics is not enabled for this session' });
+        }
+
+        const setting = settings[0];
+        const periods = typeof setting.periods === 'string' 
+            ? JSON.parse(setting.periods) 
+            : setting.periods;
+
+        // Calculate statistics
+        const statistics = await statisticsService.getAllPeriodsStatistics(sessionId, targetDate, periods);
+
+        // Send via WhatsApp
+        const sent = await statisticsService.sendStatisticsViaWhatsApp(
+            sessionId,
+            statistics,
+            setting.recipient_phone,
+            periods,
+            targetDate,
+            clients
+        );
+
+        if (sent) {
+            res.json({ success: true, message: 'Statistics sent successfully' });
+        } else {
+            res.status(500).json({ error: 'Failed to send statistics' });
+        }
+    } catch (error) {
+        console.error('Error sending statistics:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // WHATSAPP CLIENT SETUP
 // ============================================
 
@@ -2682,15 +2901,29 @@ server.listen(PORT, async () => {
     
     // Auto-initialize existing sessions
     await initializeExistingSessions();
+    
+    // Start scheduler service for daily statistics
+    schedulerService.start();
+    
     console.log(`   POST /api/status/set - Set status`);
     console.log(`   POST /api/stories/set - Set story`);
     console.log(`   POST /api/broadcast/send - Send broadcast`);
     console.log(`   GET  /api/webhooks - List webhooks`);
+    console.log(`   GET  /api/statistics - Get statistics`);
+    console.log(`   GET  /api/statistics/settings - Get statistics settings`);
+    console.log(`   PUT  /api/statistics/settings - Update statistics settings`);
+    console.log(`   POST /api/statistics/send - Send statistics manually`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down gracefully...');
+    
+    // Stop scheduler
+    if (schedulerService) {
+        schedulerService.stop();
+    }
+    
     for (const [sessionId, client] of clients) {
         console.log(`Closing session: ${sessionId}`);
         try {

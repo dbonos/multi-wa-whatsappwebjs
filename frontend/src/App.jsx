@@ -11,6 +11,7 @@ import Broadcast from './pages/Broadcast';
 import Status from './pages/Status';
 import Contacts from './pages/Contacts';
 import SkipMessages from './pages/SkipMessages';
+import Statistics from './pages/Statistics';
 import ChangePassword from './pages/ChangePassword';
 
 function AppRoutes() {
@@ -78,6 +79,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <SkipMessages />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/statistics"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Statistics />
             </Layout>
           </ProtectedRoute>
         }
