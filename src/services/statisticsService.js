@@ -225,8 +225,9 @@ class StatisticsService {
             // Structure: periodIndex -> { new: Set<from_number>, previous: Set<from_number>, replies: Map<from_number, responseTime>, firstMessage: Map<from_number, timestamp> }
             const periodCustomers = {};
             
-            // Track first message timestamp per customer per day (across all periods)
-            const customerFirstMessage = new Map(); // from_number -> first message timestamp in the day
+            // Track first message timestamp per customer per period
+            // Key: periodIndex_fromNumber -> first timestamp in that period
+            const customerFirstMessagePerPeriod = new Map();
             
             // Process each incoming message
             for (const incomingMsg of incomingMessages) {
@@ -240,13 +241,14 @@ class StatisticsService {
                     periodCustomers[periodIndex] = {
                         newCustomers: new Set(),
                         previousCustomers: new Set(),
-                        customerReplies: new Map() // from_number -> responseTimeSeconds (from first message to first reply)
+                        customerReplies: new Map() // from_number -> responseTimeSeconds (from first message in period to first reply)
                     };
                 }
 
-                // Track first message timestamp per customer per day
-                if (!customerFirstMessage.has(incomingMsg.from_number)) {
-                    customerFirstMessage.set(incomingMsg.from_number, incomingMsg.timestamp);
+                // Track first message timestamp per customer per period
+                const periodCustomerKey = `${periodIndex}_${incomingMsg.from_number}`;
+                if (!customerFirstMessagePerPeriod.has(periodCustomerKey)) {
+                    customerFirstMessagePerPeriod.set(periodCustomerKey, incomingMsg.timestamp);
                 }
 
                 // Check if new customer - use from_number instead of contact_id
@@ -256,10 +258,11 @@ class StatisticsService {
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
                 customerSet.add(incomingMsg.from_number);
 
-                // Find first reply: outgoing message to the same phone number after the incoming message
+                // Find first reply: outgoing message to the same phone number after the first message in this period
                 // IMPORTANT: Search across ALL sessions, not just the same session
                 // If message comes from session 1 and reply is sent from session 5, it should still count as replied
-                // Dibalas harus sebelum 23:59:59 hari yang sama
+                // Dibalas harus sebelum 23:59:59 hari yang sama (bisa lintas periode dalam hari yang sama)
+                const firstMessageTimeInPeriod = customerFirstMessagePerPeriod.get(periodCustomerKey);
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, fromAI, to_number, contact_id, session_id
                     FROM messages 
@@ -271,20 +274,20 @@ class StatisticsService {
                     LIMIT 1`,
                     [
                         incomingMsg.from_number,
-                        incomingMsg.timestamp,
-                        dateEndWIB  // End of day (23:59:59), not 24 hours from message
+                        firstMessageTimeInPeriod,
+                        dateEndWIB  // End of day (23:59:59), bisa lintas periode dalam hari yang sama
                     ]
                 );
                 
                 if (replies.length > 0) {
                     const reply = replies[0];
-                    // Response time = waktu dari pesan pertama customer di hari itu sampai dibalas
-                    const firstMessageTime = customerFirstMessage.get(incomingMsg.from_number);
-                    const responseTimeSeconds = reply.timestamp - firstMessageTime;
+                    // Response time = waktu dari pesan pertama customer di periode tersebut sampai dibalas
+                    // Bisa lintas periode, asal masih hari yang sama
+                    const responseTimeSeconds = reply.timestamp - firstMessageTimeInPeriod;
 
-                    // Only count if response time is positive (reply after first message)
+                    // Only count if response time is positive (reply after first message in period)
                     if (responseTimeSeconds > 0) {
-                        // Store the response time for this customer (from first message to first reply)
+                        // Store the response time for this customer in this period
                         // If customer already has a reply recorded, keep the one with faster response time
                         const existingTime = periodCustomers[periodIndex].customerReplies.get(incomingMsg.from_number);
                         if (!existingTime || responseTimeSeconds < existingTime) {
