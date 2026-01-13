@@ -2307,11 +2307,39 @@ function createClient(sessionId) {
         socketHandler.emitSessionStatus(sessionId, 'ready', { info });
     });
 
-    // Message event (incoming)
+    // Message event (incoming and outgoing from mobile device)
     // SECURITY: sessionId is bound to this closure when createClient() is called
     // This ensures messages from this client are always saved with the correct sessionId
     client.on('message', async (message) => {
         try {
+            // Check if message is from me (outgoing from mobile device)
+            if (message.fromMe) {
+                // Outgoing message from mobile device
+                console.log(`📤 [OUTGOING MESSAGE] Session: ${sessionId}, Message ID: ${message.id._serialized}, To: ${message.to}`);
+                
+                // Auto-save outgoing message from mobile device (will skip if destination in skip list)
+                const result = await messageHandler.saveOutgoingMessage(sessionId, message);
+                
+                // Check result
+                if (!result) {
+                    console.error(`❌ [OUTGOING MESSAGE] saveOutgoingMessage returned null/undefined for message: ${message.id._serialized}`);
+                } else if (result.skipped) {
+                    console.log(`⏭️ [OUTGOING MESSAGE] Message skipped (destination in skip list), not saving: ${message.id._serialized}`);
+                } else if (result.success === false) {
+                    console.error(`❌ [OUTGOING MESSAGE] Message save failed: ${result.error || 'Unknown error'}`);
+                } else if (result.success === true || result.insertId) {
+                    console.log(`✅ [OUTGOING MESSAGE] Message saved successfully, insertId: ${result.insertId}`);
+                }
+                
+                // Update last activity
+                await pool.execute(
+                    `UPDATE sessions SET last_activity = CURRENT_TIMESTAMP WHERE session_id = ?`,
+                    [sessionId]
+                );
+                return; // Exit early for outgoing messages
+            }
+            
+            // Incoming message
             // Log for security audit - verify sessionId is correct
             console.log(`📨 [INCOMING MESSAGE] Session: ${sessionId}, Message ID: ${message.id._serialized}, From: ${message.from}`);
             
@@ -2347,8 +2375,8 @@ function createClient(sessionId) {
                 [sessionId]
             );
         } catch (error) {
-            console.error(`❌ [INCOMING MESSAGE] Error handling message for ${sessionId}:`, error);
-            console.error(`❌ [INCOMING MESSAGE] Error stack:`, error.stack);
+            console.error(`❌ [MESSAGE HANDLER] Error handling message for ${sessionId}:`, error);
+            console.error(`❌ [MESSAGE HANDLER] Error stack:`, error.stack);
         }
     });
 

@@ -156,6 +156,163 @@ class MessageHandler {
         }
     }
 
+    // Save outgoing message from mobile device to database
+    async saveOutgoingMessage(sessionId, message) {
+        try {
+            console.log(`📤 [MESSAGE HANDLER] Processing outgoing message from mobile: ${message.id._serialized} for session: ${sessionId}`);
+            
+            const chat = await message.getChat();
+            const contact = await chat.getContact ? await chat.getContact() : null;
+            
+            // For outgoing messages, to_number is the destination
+            const isGroup = chat.isGroup || false;
+            const contactId = chat.id._serialized; // This is the destination (to_number)
+            const toNumber = isGroup ? null : (contact?.number || (contactId.includes('@c.us') ? contactId.replace('@c.us', '') : null));
+            
+            console.log(`📤 [MESSAGE HANDLER] Outgoing message details:`, {
+                messageId: message.id._serialized,
+                contactId: contactId,
+                toNumber: toNumber,
+                isGroup: isGroup,
+                hasBody: !!message.body
+            });
+            
+            // Save contact first (with @lid conversion) - needed to get correct contact_id
+            let contactInfo = null;
+            if (contact) {
+                contactInfo = await this.saveContact(sessionId, contact);
+            }
+            
+            // Update contactId with contactInfo if available
+            const finalContactId = contactInfo?.contactId || contactId;
+            const finalToNumber = contactInfo?.phoneNumber || toNumber;
+            
+            // Check if destination should be skipped
+            // For outgoing: check if TO (destination) is in skip list
+            const shouldSkip = await this.shouldSkipMessage(sessionId, finalContactId, finalToNumber, isGroup);
+            console.log(`📤 [MESSAGE HANDLER] Should skip: ${shouldSkip}`, {
+                originalContactId: contactId,
+                finalContactId: finalContactId,
+                isGroup: isGroup
+            });
+            
+            if (shouldSkip) {
+                console.log(`⏭️  [SKIP] Outgoing message skipped (destination in skip list): ${message.id._serialized} to ${isGroup ? 'group' : 'contact'} ${finalContactId}`);
+                return { skipped: true, messageId: message.id._serialized };
+            }
+            
+            console.log(`💾 [MESSAGE HANDLER] Outgoing message will be saved to database: ${message.id._serialized}`);
+            
+            // Determine message type
+            let messageType = 'text';
+            let attachmentPath = null;
+            let caption = null;
+
+            if (message.hasMedia) {
+                const media = await message.downloadMedia();
+                const mediaType = media.mimetype || '';
+                
+                if (mediaType.startsWith('image/')) messageType = 'image';
+                else if (mediaType.startsWith('video/')) messageType = 'video';
+                else if (mediaType.startsWith('audio/')) messageType = 'audio';
+                else if (mediaType.includes('pdf') || mediaType.includes('document')) messageType = 'document';
+                else messageType = 'other';
+
+                // Save attachment
+                attachmentPath = await this.saveAttachment(sessionId, message.id._serialized, media, messageType);
+                caption = message.body || null;
+            }
+
+            // Check if message is a reply
+            let replyToMessageId = null;
+            if (message.hasQuotedMsg) {
+                try {
+                    const quotedMsg = await message.getQuotedMessage();
+                    if (quotedMsg) {
+                        replyToMessageId = quotedMsg.id._serialized;
+                    }
+                } catch (err) {
+                    console.log('Error getting quoted message:', err.message);
+                }
+            }
+
+            // Save message
+            // Outgoing messages from mobile device are fromAI = 0 (not from API)
+            let [result] = await pool.execute(
+                `INSERT INTO messages 
+                (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path)
+                VALUES (?, ?, ?, ?, ?, 'outgoing', 0, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                updated_at = CURRENT_TIMESTAMP`,
+                [
+                    sessionId,
+                    message.id._serialized,
+                    null, // from_number for outgoing
+                    finalToNumber,
+                    finalContactId,
+                    messageType,
+                    message.body || caption || '',
+                    caption,
+                    message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
+                    message.isForwarded || false,
+                    message.hasQuotedMsg || false,
+                    replyToMessageId,
+                    replyToMessageId,
+                    attachmentPath
+                ]
+            );
+            
+            // If ON DUPLICATE KEY UPDATE was used, result.insertId will be 0
+            if (result.insertId === 0) {
+                console.log(`ℹ️ [MESSAGE HANDLER] Outgoing message already exists in database: ${message.id._serialized}`);
+                const [existing] = await pool.execute(
+                    `SELECT id FROM messages WHERE message_id = ? LIMIT 1`,
+                    [message.id._serialized]
+                );
+                if (existing.length > 0) {
+                    result.insertId = existing[0].id;
+                }
+            }
+
+            // Save reply relationship if exists
+            if (replyToMessageId) {
+                await this.saveReply(sessionId, message.id._serialized, replyToMessageId);
+            }
+
+            // Forward to webhook if configured
+            if (this.webhookBaseUrl) {
+                try {
+                    await axios.post(`${this.webhookBaseUrl}/webhook/message`, {
+                        event: 'message',
+                        sessionId: sessionId,
+                        message: {
+                            id: message.id._serialized,
+                            from: null, // Outgoing message
+                            to: finalToNumber,
+                            contactId: finalContactId,
+                            type: messageType,
+                            body: message.body || caption,
+                            timestamp: message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
+                            attachment: attachmentPath ? {
+                                path: attachmentPath,
+                                type: messageType
+                            } : null,
+                            direction: 'outgoing',
+                            fromAI: 0
+                        }
+                    });
+                } catch (webhookError) {
+                    console.error('Error forwarding to webhook:', webhookError.message);
+                }
+            }
+
+            return { success: true, insertId: result.insertId, messageId: message.id._serialized };
+        } catch (error) {
+            console.error(`❌ [MESSAGE HANDLER] Error saving outgoing message for session ${sessionId}:`, error);
+            return { success: false, error: error.message, messageId: message.id._serialized };
+        }
+    }
+
     // Save incoming message to database
     async saveIncomingMessage(sessionId, message) {
         try {
