@@ -1635,11 +1635,14 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
         const { sessionId } = req.query;
         const targetSessionId = req.user.role === 'admin' ? sessionId : req.user.session_id;
         
+        console.log(`📋 [SKIP GROUPS] Request for sessionId: ${sessionId}, targetSessionId: ${targetSessionId}, userRole: ${req.user.role}`);
+        
         if (!targetSessionId) {
             return res.status(400).json({ error: 'sessionId is required' });
         }
         
         // Get all groups from contacts
+        // Note: is_group might be stored as BOOLEAN (0/1) or TRUE/FALSE
         const [groups] = await pool.execute(
             `SELECT DISTINCT 
                 c.contact_id as group_id,
@@ -1649,11 +1652,13 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
                 MAX(m.timestamp) as last_message_time
             FROM contacts c
             LEFT JOIN messages m ON m.contact_id = c.contact_id AND m.session_id = c.session_id
-            WHERE c.session_id = ? AND c.is_group = TRUE
+            WHERE c.session_id = ? AND (c.is_group = TRUE OR c.is_group = 1)
             GROUP BY c.contact_id, c.name, c.pushname
             ORDER BY last_message_time DESC, c.name ASC`,
             [targetSessionId]
         );
+        
+        console.log(`📋 [SKIP GROUPS] Found ${groups.length} groups for session ${targetSessionId}`);
         
         // Get which groups are already in skip list
         const [skipGroups] = await pool.execute(
@@ -1662,6 +1667,8 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             [targetSessionId]
         );
         const skippedGroupIds = new Set(skipGroups.map(g => g.group_id));
+        
+        console.log(`📋 [SKIP GROUPS] Found ${skipGroups.length} groups already in skip list`);
         
         // Add skip status to each group
         const groupsWithSkipStatus = groups.map(group => ({

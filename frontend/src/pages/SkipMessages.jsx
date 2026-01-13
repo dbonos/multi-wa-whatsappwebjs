@@ -82,11 +82,17 @@ export default function SkipMessages() {
 
   const loadGroups = async () => {
     try {
+      console.log('📋 [SKIP MESSAGES] Loading groups for session:', selectedSession);
       const response = await skipMessagesAPI.getGroups(selectedSession);
+      console.log('📋 [SKIP MESSAGES] Groups response:', response.data);
       setGroups(response.data.groups || []);
+      if (response.data.groups && response.data.groups.length === 0) {
+        console.warn('⚠️ [SKIP MESSAGES] No groups found for session:', selectedSession);
+      }
     } catch (error) {
-      console.error('Failed to load groups:', error);
-      toast.error('Failed to load groups');
+      console.error('❌ [SKIP MESSAGES] Failed to load groups:', error);
+      console.error('❌ [SKIP MESSAGES] Error details:', error.response?.data || error.message);
+      toast.error('Failed to load groups: ' + (error.response?.data?.error || error.message));
     }
   };
 
