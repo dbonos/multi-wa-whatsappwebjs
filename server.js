@@ -902,36 +902,62 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             while (retries > 0) {
                 try {
                     console.log(`📤 [SEND MESSAGE] Attempting to send message (${4 - retries}/3)...`);
+                    // Ensure caption is set before each attempt
+                    if (mediaCaption && !media.caption) {
+                        media.caption = mediaCaption;
+                        console.log(`🔄 [SEND MESSAGE] Re-setting caption before send: "${mediaCaption.substring(0, 50)}${mediaCaption.length > 50 ? '...' : ''}"`);
+                    }
                     sentMessage = await client.sendMessage(chatId, media);
-                    console.log(`✅ [SEND MESSAGE] Message sent successfully`);
+                    console.log(`✅ [SEND MESSAGE] Message sent successfully with caption: ${media.caption ? 'YES' : 'NO'}`);
                     break;
                 } catch (sendError) {
                     lastError = sendError;
-                    if (sendError.message && sendError.message.includes('detached Frame')) {
-                        console.error(`❌ [SEND MESSAGE] Detached frame error, retrying... (${retries} attempts left)`);
+                    const isDetachedFrameError = sendError.message && (
+                        sendError.message.includes('detached Frame') ||
+                        sendError.message.includes('detached frame') ||
+                        sendError.message.includes('Target closed') ||
+                        sendError.message.includes('Session closed')
+                    );
+                    
+                    if (isDetachedFrameError) {
+                        console.error(`❌ [SEND MESSAGE] Detached frame error (attempt ${4 - retries}/3):`, sendError.message);
                         retries--;
                         if (retries > 0) {
-                            // Wait a bit before retry
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                            // Recreate media object from buffer
+                            // Wait longer before retry (3 seconds for PDF)
+                            const waitTime = file.mimetype && file.mimetype.includes('pdf') ? 3000 : 2000;
+                            console.log(`⏳ [SEND MESSAGE] Waiting ${waitTime}ms before retry...`);
+                            await new Promise(resolve => setTimeout(resolve, waitTime));
+                            
+                            // Always recreate media object from buffer for retry (more reliable)
                             try {
+                                console.log(`🔄 [SEND MESSAGE] Recreating media object from buffer...`);
                                 const fileBuffer = fsSync.readFileSync(file.path);
                                 const base64 = fileBuffer.toString('base64');
                                 media = new MessageMedia(file.mimetype, base64, file.filename);
-                                if (mediaCaption) media.caption = mediaCaption;
-                                console.log(`🔄 [SEND MESSAGE] Recreated media object for retry`);
+                                // CRITICAL: Re-set caption after recreating media
+                                if (mediaCaption) {
+                                    media.caption = mediaCaption;
+                                    console.log(`✅ [SEND MESSAGE] Recreated media with caption: "${mediaCaption.substring(0, 50)}${mediaCaption.length > 50 ? '...' : ''}"`);
+                                } else {
+                                    console.log(`⚠️ [SEND MESSAGE] Recreated media without caption`);
+                                }
                             } catch (recreateError) {
                                 console.error(`❌ [SEND MESSAGE] Error recreating media:`, recreateError.message);
+                                // Continue anyway, try with existing media
                             }
+                        } else {
+                            console.error(`❌ [SEND MESSAGE] All retry attempts exhausted`);
                         }
                     } else {
                         // Not a detached frame error, don't retry
+                        console.error(`❌ [SEND MESSAGE] Non-retryable error:`, sendError.message);
                         throw sendError;
                     }
                 }
             }
             
             if (!sentMessage && lastError) {
+                console.error(`❌ [SEND MESSAGE] Failed after all retries:`, lastError.message);
                 throw lastError;
             }
         } else {
