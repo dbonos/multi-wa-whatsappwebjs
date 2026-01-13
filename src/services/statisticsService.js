@@ -293,28 +293,36 @@ class StatisticsService {
                 const stat = statistics[parseInt(periodIndex)];
                 
                 // Process new customers
+                // count = total unique customers (yang punya reply + yang tidak punya reply)
+                // unreplied_count = unique customers yang tidak punya reply
                 for (const fromNumber of periodData.newCustomers) {
-                    // If customer has at least one reply (in customerReplies), count as replied
+                    // Count all unique customers
+                    stat.new_customer.count++;
+                    
+                    // If customer has at least one reply (in customerReplies), record response time
                     if (periodData.customerReplies.has(fromNumber)) {
                         const responseTime = periodData.customerReplies.get(fromNumber);
                         stat.new_customer.response_times.push(responseTime);
-                        stat.new_customer.count++; // Count unique customer with reply
                     } else {
-                        // Customer has no replies at all
-                        stat.new_customer.unreplied_count++; // Count unique customer without reply
+                        // Customer has no replies at all - count as unreplied
+                        stat.new_customer.unreplied_count++;
                     }
                 }
                 
                 // Process previous customers
+                // count = total unique customers (yang punya reply + yang tidak punya reply)
+                // unreplied_count = unique customers yang tidak punya reply
                 for (const fromNumber of periodData.previousCustomers) {
-                    // If customer has at least one reply (in customerReplies), count as replied
+                    // Count all unique customers
+                    stat.previous_customer.count++;
+                    
+                    // If customer has at least one reply (in customerReplies), record response time
                     if (periodData.customerReplies.has(fromNumber)) {
                         const responseTime = periodData.customerReplies.get(fromNumber);
                         stat.previous_customer.response_times.push(responseTime);
-                        stat.previous_customer.count++; // Count unique customer with reply
                     } else {
-                        // Customer has no replies at all
-                        stat.previous_customer.unreplied_count++; // Count unique customer without reply
+                        // Customer has no replies at all - count as unreplied
+                        stat.previous_customer.unreplied_count++;
                     }
                 }
             }
