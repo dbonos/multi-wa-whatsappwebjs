@@ -795,7 +795,7 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         if (req.files) {
             if (Array.isArray(req.files)) {
                 // From multer.any() - array of files
-                file = req.files.find(f => f.fieldname === 'attachment') || req.files[0];
+            file = req.files.find(f => f.fieldname === 'attachment') || req.files[0];
             } else if (typeof req.files === 'object') {
                 // From multer.fields() - object with field names as keys
                 if (req.files.attachment && Array.isArray(req.files.attachment) && req.files.attachment.length > 0) {
@@ -883,21 +883,33 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             // If there's text with attachment, use it as caption
             // Priority: caption field > message field
             const mediaCaption = caption || message || null;
+            const fileType = file.mimetype ? file.mimetype.split('/')[0] : 'unknown';
+            const isImageOrVideo = fileType === 'image' || fileType === 'video';
+            
             console.log(`📎 [SEND MESSAGE] Attachment caption:`, {
                 caption: caption || 'null',
                 message: message || 'null',
                 mediaCaption: mediaCaption || 'null',
-                willSetCaption: !!mediaCaption
+                fileType: fileType,
+                mimetype: file.mimetype,
+                isImageOrVideo: isImageOrVideo,
+                willSetCaption: !!mediaCaption && isImageOrVideo
             });
-            if (mediaCaption) {
+            
+            // WhatsApp only supports caption for images and videos
+            // For documents/PDF, we need to send as separate message
+            if (mediaCaption && isImageOrVideo) {
                 media.caption = mediaCaption;
-                console.log(`✅ [SEND MESSAGE] Caption set on media: "${mediaCaption.substring(0, 50)}${mediaCaption.length > 50 ? '...' : ''}"`);
+                console.log(`✅ [SEND MESSAGE] Caption set on media (${fileType}): "${mediaCaption.substring(0, 50)}${mediaCaption.length > 50 ? '...' : ''}"`);
                 // Verify caption is actually set
                 console.log(`✅ [SEND MESSAGE] Caption verification:`, {
                     hasCaption: !!media.caption,
                     captionValue: media.caption || 'null',
                     captionLength: media.caption ? media.caption.length : 0
                 });
+            } else if (mediaCaption && !isImageOrVideo) {
+                console.log(`ℹ️ [SEND MESSAGE] Caption not supported for ${fileType} (${file.mimetype}). Will send text as separate message after media.`);
+                // For documents/PDF, we'll send text as separate message after media
             } else {
                 console.log(`⚠️ [SEND MESSAGE] No caption provided for attachment`);
             }
@@ -1080,10 +1092,10 @@ app.get('/api/messages', authenticate, async (req, res) => {
                 let reactions = [];
                 try {
                     const [reactionsData] = await pool.execute(
-                        `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
-                        FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
-                        [msg.message_id]
-                    );
+                    `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+                    FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+                    [msg.message_id]
+                );
                     reactions = reactionsData || [];
                 } catch (error) {
                     console.warn('⚠️ [MESSAGES] Error fetching reactions (table may not exist):', error.message);
@@ -1094,12 +1106,12 @@ app.get('/api/messages', authenticate, async (req, res) => {
                 let replyToMessage = null;
                 if (msg.reply_to_message_id) {
                     try {
-                        const [replies] = await pool.execute(
-                            `SELECT message_id, body, caption, message_type, from_number, timestamp
-                            FROM messages WHERE message_id = ?`,
-                            [msg.reply_to_message_id]
-                        );
-                        replyToMessage = replies[0] || null;
+                    const [replies] = await pool.execute(
+                        `SELECT message_id, body, caption, message_type, from_number, timestamp
+                        FROM messages WHERE message_id = ?`,
+                        [msg.reply_to_message_id]
+                    );
+                    replyToMessage = replies[0] || null;
                     } catch (error) {
                         console.warn('⚠️ [MESSAGES] Error fetching reply message:', error.message);
                         replyToMessage = null;
@@ -1145,10 +1157,10 @@ app.get('/api/messages/:messageId/status', authenticate, async (req, res) => {
         let reactions = [];
         try {
             const [reactionsData] = await pool.execute(
-                `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
-                FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
-                [messageId]
-            );
+            `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+            FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+            [messageId]
+        );
             reactions = reactionsData || [];
         } catch (error) {
             console.warn('⚠️ [STATUS] Error fetching reactions (table may not exist):', error.message);
@@ -1172,11 +1184,11 @@ app.get('/api/messages/:messageId/reactions', authenticate, async (req, res) => 
         const { messageId } = req.params;
 
         try {
-            const [reactions] = await pool.execute(
-                `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
-                FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
-                [messageId]
-            );
+        const [reactions] = await pool.execute(
+            `SELECT reaction_emoji, reaction_text, from_number, timestamp, created_at
+            FROM message_reactions WHERE message_id = ? ORDER BY created_at DESC`,
+            [messageId]
+        );
 
             res.json({ success: true, reactions: reactions || [] });
         } catch (dbError) {
@@ -1202,15 +1214,15 @@ app.get('/api/messages/:messageId/replies', authenticate, async (req, res) => {
         // Check if message_replies table exists
         try {
             // Try to get replies
-            const [replies] = await pool.execute(
-                `SELECT m.*, a.file_name, a.file_path, a.file_type
-                FROM message_replies mr
-                JOIN messages m ON m.message_id = mr.message_id
-                LEFT JOIN attachments a ON a.message_id = m.message_id
-                WHERE mr.reply_to_message_id = ?
-                ORDER BY m.timestamp DESC`,
-                [messageId]
-            );
+        const [replies] = await pool.execute(
+            `SELECT m.*, a.file_name, a.file_path, a.file_type
+            FROM message_replies mr
+            JOIN messages m ON m.message_id = mr.message_id
+            LEFT JOIN attachments a ON a.message_id = m.message_id
+            WHERE mr.reply_to_message_id = ?
+            ORDER BY m.timestamp DESC`,
+            [messageId]
+        );
 
             console.log(`✅ [REPLIES] Found ${replies.length} replies`);
             return res.json({ success: true, replies: replies || [] });
@@ -1542,7 +1554,7 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
                     let lastError = null;
                     while (retries > 0) {
                         try {
-                            sentMessage = await client.sendMessage(chatId, media);
+                    sentMessage = await client.sendMessage(chatId, media);
                             break;
                         } catch (sendError) {
                             lastError = sendError;
@@ -1562,7 +1574,7 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
                                         console.error(`❌ [BROADCAST] Error recreating media:`, recreateError.message);
                                     }
                                 }
-                            } else {
+                } else {
                                 throw sendError;
                             }
                         }
@@ -1592,12 +1604,12 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
             } catch (error) {
                 console.error(`❌ [BROADCAST] Error sending to ${recipient.phone_number || recipient.contact_id}:`, error.message);
                 try {
-                    await pool.execute(
-                        `UPDATE broadcast_recipients 
-                         SET status = 'failed' 
-                         WHERE id = ?`,
-                        [recipient.id]
-                    );
+                await pool.execute(
+                    `UPDATE broadcast_recipients 
+                     SET status = 'failed' 
+                     WHERE id = ?`,
+                    [recipient.id]
+                );
                 } catch (updateError) {
                     console.error(`❌ [BROADCAST] Error updating recipient status:`, updateError.message);
                 }
@@ -2303,12 +2315,12 @@ function createClient(sessionId) {
             // Only emit via WebSocket if message was not skipped
             // (Skipped messages are not saved but can still be emitted if needed)
             if (!result || !result.skipped) {
-                socketHandler.emitNewMessage(sessionId, {
-                    id: message.id._serialized,
-                    body: message.body,
-                    from: message.from,
-                    timestamp: message.timestamp
-                });
+            socketHandler.emitNewMessage(sessionId, {
+                id: message.id._serialized,
+                body: message.body,
+                from: message.from,
+                timestamp: message.timestamp
+            });
             }
 
             // Update last activity
