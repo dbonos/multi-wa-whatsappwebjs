@@ -105,9 +105,18 @@ export default function Broadcast() {
       const formData = new FormData();
       formData.append('sessionId', selectedSession.trim());
       formData.append('broadcastListId', selectedList.toString());
-      if (message.trim()) {
+      
+      // If there's attachment and message, send message as caption
+      // Otherwise, send as regular message
+      if (attachment && message.trim()) {
+        // When attachment exists, send text as caption
+        formData.append('caption', message.trim());
+        formData.append('message', message.trim()); // Also send as message for backward compatibility
+      } else if (message.trim()) {
+        // No attachment, send as regular message
         formData.append('message', message.trim());
       }
+      
       if (attachment) {
         formData.append('attachment', attachment);
       }

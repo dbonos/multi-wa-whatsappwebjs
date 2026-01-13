@@ -1435,19 +1435,75 @@ app.post('/api/broadcast/send', authenticate, upload.single('attachment'), async
                 let sentMessage;
 
                 if (file) {
-                    const media = MessageMedia.fromFilePath(file.path);
+                    let media;
+                    const fsSync = require('fs');
+                    try {
+                        media = MessageMedia.fromFilePath(file.path);
+                    } catch (mediaError) {
+                        console.error(`❌ [BROADCAST] Error creating MessageMedia from file path:`, mediaError.message);
+                        // Fallback to buffer-based creation
+                        try {
+                            const fileBuffer = fsSync.readFileSync(file.path);
+                            const base64 = fileBuffer.toString('base64');
+                            media = new MessageMedia(file.mimetype, base64, file.filename);
+                            console.log(`✅ [BROADCAST] Created MessageMedia from buffer`);
+                        } catch (bufferError) {
+                            console.error(`❌ [BROADCAST] Error creating MessageMedia from buffer:`, bufferError.message);
+                            throw new Error(`Failed to create media object: ${bufferError.message}`);
+                        }
+                    }
+                    
                     // Use caption if provided, otherwise use message
+                    // Priority: caption > message
                     const mediaCaption = caption || message || null;
                     console.log(`📢 [BROADCAST] Sending to ${chatId}:`, {
                         hasFile: true,
+                        filename: file.filename,
+                        mimetype: file.mimetype,
                         caption: caption || 'null',
                         message: message || 'null',
-                        mediaCaption: mediaCaption || 'null'
+                        mediaCaption: mediaCaption || 'null',
+                        willSetCaption: !!mediaCaption
                     });
                     if (mediaCaption) {
                         media.caption = mediaCaption;
+                        console.log(`✅ [BROADCAST] Caption set: "${mediaCaption.substring(0, 50)}${mediaCaption.length > 50 ? '...' : ''}"`);
                     }
-                    sentMessage = await client.sendMessage(chatId, media);
+                    
+                    // Retry mechanism for detached frame errors
+                    let retries = 3;
+                    let lastError = null;
+                    while (retries > 0) {
+                        try {
+                            sentMessage = await client.sendMessage(chatId, media);
+                            break;
+                        } catch (sendError) {
+                            lastError = sendError;
+                            if (sendError.message && sendError.message.includes('detached Frame')) {
+                                console.error(`❌ [BROADCAST] Detached frame error, retrying... (${retries} attempts left)`);
+                                retries--;
+                                if (retries > 0) {
+                                    await new Promise(resolve => setTimeout(resolve, 2000));
+                                    // Recreate media object
+                                    try {
+                                        const fileBuffer = fsSync.readFileSync(file.path);
+                                        const base64 = fileBuffer.toString('base64');
+                                        media = new MessageMedia(file.mimetype, base64, file.filename);
+                                        if (mediaCaption) media.caption = mediaCaption;
+                                        console.log(`🔄 [BROADCAST] Recreated media object for retry`);
+                                    } catch (recreateError) {
+                                        console.error(`❌ [BROADCAST] Error recreating media:`, recreateError.message);
+                                    }
+                                }
+                            } else {
+                                throw sendError;
+                            }
+                        }
+                    }
+                    
+                    if (!sentMessage && lastError) {
+                        throw lastError;
+                    }
                 } else {
                     if (!message) {
                         throw new Error('Message is required when no attachment');
