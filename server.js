@@ -1868,13 +1868,13 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
                 c.contact_id as group_id,
                 c.name,
                 c.pushname,
-                c.profile_picture_url,
+                c.profile_pic_url as profile_picture_url,
                 COUNT(DISTINCT m.id) as message_count,
                 MAX(m.timestamp) as last_message_time
             FROM contacts c
             LEFT JOIN messages m ON m.contact_id = c.contact_id AND m.session_id = c.session_id
             WHERE c.session_id = ? AND (c.is_group = TRUE OR c.is_group = 1)
-            GROUP BY c.contact_id, c.name, c.pushname, c.profile_picture_url
+            GROUP BY c.contact_id, c.name, c.pushname, c.profile_pic_url
             ORDER BY last_message_time DESC, c.name ASC`,
             [targetSessionId]
         );
