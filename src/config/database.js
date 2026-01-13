@@ -60,8 +60,17 @@ pool.execute = async function(sql, params) {
         //          connected_at, last_activity, qr_expires_at, completed_at, sent_at, etc.
         // Use SET time_zone to ensure CURRENT_TIMESTAMP uses WIB
         await connection.query("SET time_zone = '+07:00'");
+        
+        // For INSERT/UPDATE queries with CURRENT_TIMESTAMP, replace with explicit WIB conversion
+        // CONVERT_TZ(NOW(), '+00:00', '+07:00') converts UTC to WIB explicitly
+        let modifiedSql = sql;
+        if (sql.includes('CURRENT_TIMESTAMP')) {
+            // Replace CURRENT_TIMESTAMP with explicit WIB conversion
+            modifiedSql = sql.replace(/CURRENT_TIMESTAMP/g, "CONVERT_TZ(NOW(), '+00:00', '+07:00')");
+        }
+        
         // Execute the actual query - CURRENT_TIMESTAMP will now use WIB
-        const result = await connection.execute(sql, params);
+        const result = await connection.execute(modifiedSql, params);
         return result;
     } catch (error) {
         console.error(`❌ [DB] Error in execute wrapper:`, error.message);
@@ -80,7 +89,16 @@ pool.query = async function(sql, params) {
         // CRITICAL: ALWAYS set timezone BEFORE executing query
         // This ensures CURRENT_TIMESTAMP uses WIB for all _at columns
         await connection.query("SET time_zone = '+07:00'");
-        const result = await connection.query(sql, params);
+        
+        // For INSERT/UPDATE queries with CURRENT_TIMESTAMP, replace with explicit WIB conversion
+        // CONVERT_TZ(NOW(), '+00:00', '+07:00') converts UTC to WIB explicitly
+        let modifiedSql = sql;
+        if (sql.includes('CURRENT_TIMESTAMP')) {
+            // Replace CURRENT_TIMESTAMP with explicit WIB conversion
+            modifiedSql = sql.replace(/CURRENT_TIMESTAMP/g, "CONVERT_TZ(NOW(), '+00:00', '+07:00')");
+        }
+        
+        const result = await connection.query(modifiedSql, params);
         return result;
     } finally {
         connection.release();
