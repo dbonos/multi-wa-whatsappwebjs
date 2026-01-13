@@ -233,8 +233,27 @@ class StatisticsService {
                     };
                 }
 
-                // Check if new customer - use from_number instead of contact_id
-                const isNew = await this.isNewCustomer(sessionId, incomingMsg.from_number, dateStr);
+                // Check if new customer for THIS PERIOD
+                // New customer = customer yang pertama kali muncul di period ini (tidak pernah muncul di period sebelumnya)
+                // Previous customer = customer yang sudah pernah muncul di period sebelumnya
+                let isNew = true;
+                
+                // Check if customer has messages before this period's start time
+                const period = periodsArray[periodIndex];
+                const [startHour, startMin] = period.start.split(':').map(Number);
+                const periodStartDate = new Date(dateStr + `T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00+07:00`);
+                const periodStartWIB = Math.floor(periodStartDate.getTime() / 1000);
+                
+                const [beforePeriodMessages] = await pool.execute(
+                    `SELECT COUNT(*) as count FROM messages 
+                     WHERE session_id = ? 
+                     AND from_number = ? 
+                     AND direction = 'incoming'
+                     AND timestamp < ?`,
+                    [sessionId, incomingMsg.from_number, periodStartWIB]
+                );
+                
+                isNew = beforePeriodMessages[0].count === 0;
                 
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
                 customerSet.add(incomingMsg.from_number);
