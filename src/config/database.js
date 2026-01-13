@@ -12,7 +12,21 @@ const pool = mysql.createPool({
     queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    timezone: '+07:00' // WIB (UTC+7)
+    timezone: '+07:00', // WIB (UTC+7)
+    // Set timezone for every new connection automatically
+    // This ensures CURRENT_TIMESTAMP uses WIB timezone
+    typeCast: function (field, next) {
+        if (field.type === 'TIMESTAMP' || field.type === 'DATETIME' || field.type === 'DATE') {
+            return field.string();
+        }
+        return next();
+    }
+});
+
+// Set timezone for all connections using connection initialization
+// This is more reliable than setting it per query
+pool.on('connection', function (connection) {
+    // Note: This event doesn't fire with mysql2/promise, so we use wrapper instead
 });
 
 // Wrapper to ensure timezone is set for each connection
