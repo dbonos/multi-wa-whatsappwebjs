@@ -233,44 +233,25 @@ class StatisticsService {
                     };
                 }
 
-                // Check if new customer for THIS PERIOD
-                // New customer = customer yang pertama kali muncul di period ini (tidak pernah muncul di period sebelumnya)
-                // Previous customer = customer yang sudah pernah muncul di period sebelumnya
-                let isNew = true;
-                
-                // Check if customer has messages before this period's start time
-                const period = periodsArray[periodIndex];
-                const [startHour, startMin] = period.start.split(':').map(Number);
-                const periodStartDate = new Date(dateStr + `T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00+07:00`);
-                const periodStartWIB = Math.floor(periodStartDate.getTime() / 1000);
-                
-                const [beforePeriodMessages] = await pool.execute(
-                    `SELECT COUNT(*) as count FROM messages 
-                     WHERE session_id = ? 
-                     AND from_number = ? 
-                     AND direction = 'incoming'
-                     AND timestamp < ?`,
-                    [sessionId, incomingMsg.from_number, periodStartWIB]
-                );
-                
-                isNew = beforePeriodMessages[0].count === 0;
+                // Check if new customer - use from_number instead of contact_id
+                const isNew = await this.isNewCustomer(sessionId, incomingMsg.from_number, dateStr);
                 
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
                 customerSet.add(incomingMsg.from_number);
 
                 // Find first reply: outgoing message to the same phone number after the incoming message
+                // IMPORTANT: Search across ALL sessions, not just the same session
+                // If message comes from session 1 and reply is sent from session 5, it should still count as replied
                 const [replies] = await pool.execute(
-                    `SELECT message_id, timestamp, fromAI, to_number, contact_id
+                    `SELECT message_id, timestamp, fromAI, to_number, contact_id, session_id
                     FROM messages 
-                    WHERE session_id = ?
-                    AND direction = 'outgoing'
+                    WHERE direction = 'outgoing'
                     AND to_number = ?
                     AND timestamp > ?
                     AND timestamp <= ?
                     ORDER BY timestamp ASC
                     LIMIT 1`,
                     [
-                        sessionId, 
                         incomingMsg.from_number,
                         incomingMsg.timestamp,
                         incomingMsg.timestamp + 86400
