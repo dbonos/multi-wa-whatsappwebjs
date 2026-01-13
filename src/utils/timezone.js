@@ -34,6 +34,18 @@ function timestampToWIB(timestamp) {
 }
 
 /**
+ * Convert UTC timestamp (from WhatsApp server) to WIB timestamp
+ * WhatsApp sends Unix timestamp in UTC, this converts it to WIB
+ * @param {number} utcTimestamp - Unix timestamp in seconds (UTC)
+ * @returns {number} Unix timestamp in seconds (WIB)
+ */
+function convertUTCToWIBTimestamp(utcTimestamp) {
+    if (!utcTimestamp) return getWIBTimestamp();
+    // UTC timestamp is already in seconds, add 7 hours (7 * 60 * 60 seconds)
+    return utcTimestamp + (7 * 60 * 60);
+}
+
+/**
  * Get current Unix timestamp in WIB (seconds)
  * @returns {number} Unix timestamp in seconds
  */
@@ -114,6 +126,7 @@ function formatWIBDisplay(date) {
 module.exports = {
     getWIBTime,
     timestampToWIB,
+    convertUTCToWIBTimestamp,
     getWIBTimestamp,
     formatWIB,
     getWIBToday,

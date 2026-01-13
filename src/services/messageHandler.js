@@ -2,7 +2,7 @@ const pool = require('../config/database');
 const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
-const { getWIBTime, getWIBTimestamp, getWIBToday, formatWIBDisplay } = require('../utils/timezone');
+const { getWIBTime, getWIBTimestamp, getWIBToday, formatWIBDisplay, convertUTCToWIBTimestamp } = require('../utils/timezone');
 
 class MessageHandler {
     constructor() {
@@ -233,7 +233,10 @@ class MessageHandler {
                     messageType,
                     message.body || caption || '',
                     caption,
-                    message.timestamp || getWIBTimestamp(),
+                    // Convert WhatsApp timestamp (UTC) to WIB timestamp
+                    // WhatsApp server sends timestamp in UTC, we convert it to WIB for consistency
+                    // This ensures all timestamps in our database are in WIB timezone
+                    message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
                     message.isForwarded || false,
                     message.hasQuotedMsg || false,
                     replyToMessageId,
