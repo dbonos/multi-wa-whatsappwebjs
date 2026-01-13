@@ -20,18 +20,21 @@ pool.getConnection()
     .then(async (connection) => {
         console.log('✅ Database connected');
         // Set MySQL session timezone to WIB
-        await connection.query("SET time_zone = '+07:00'");
+        try {
+            await connection.query("SET time_zone = '+07:00'");
+            console.log('✅ Database timezone set to WIB (UTC+7)');
+        } catch (err) {
+            console.error('⚠️ Warning: Could not set timezone:', err.message);
+        }
         connection.release();
-        console.log('✅ Database timezone set to WIB (UTC+7)');
     })
     .catch(err => {
         console.error('❌ Database connection error:', err.message);
     });
 
 // Set timezone for all new connections
-pool.on('connection', async (connection) => {
-    await connection.query("SET time_zone = '+07:00'");
-});
+// Note: mysql2/promise pool doesn't have 'connection' event
+// Timezone will be set per query or via connection initialization
 
 module.exports = pool;
 
