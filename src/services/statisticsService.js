@@ -99,15 +99,15 @@ class StatisticsService {
             const dateObj = new Date(dateStr + 'T00:00:00+07:00'); // WIB timezone
             const dateStartWIB = Math.floor(dateObj.getTime() / 1000);
             
-            // Check by from_number (phone number) - more reliable than contact_id
+            // Check by from_number (phone number) across ALL sessions
+            // New customer = belum pernah WA (tidak ada di database sebelumnya di semua session)
             const [messages] = await pool.execute(
                 `SELECT id FROM messages 
-                WHERE session_id = ? 
-                AND from_number = ? 
+                WHERE from_number = ? 
                 AND direction = 'incoming'
                 AND timestamp < ?
                 LIMIT 1`,
-                [sessionId, fromNumber, dateStartWIB]
+                [fromNumber, dateStartWIB]
             );
 
             return messages.length === 0;
@@ -214,8 +214,11 @@ class StatisticsService {
             console.log(`📊 [STATISTICS] Processing ${incomingMessages.length} incoming messages for date ${dateStr}`);
             
             // Group messages by period and customer (from_number)
-            // Structure: periodIndex -> { new: Set<from_number>, previous: Set<from_number>, replies: Map<from_number, responseTime> }
+            // Structure: periodIndex -> { new: Set<from_number>, previous: Set<from_number>, replies: Map<from_number, responseTime>, firstMessage: Map<from_number, timestamp> }
             const periodCustomers = {};
+            
+            // Track first message timestamp per customer per day (across all periods)
+            const customerFirstMessage = new Map(); // from_number -> first message timestamp in the day
             
             // Process each incoming message
             for (const incomingMsg of incomingMessages) {
@@ -229,11 +232,17 @@ class StatisticsService {
                     periodCustomers[periodIndex] = {
                         newCustomers: new Set(),
                         previousCustomers: new Set(),
-                        customerReplies: new Map() // from_number -> responseTimeSeconds (fastest reply)
+                        customerReplies: new Map() // from_number -> responseTimeSeconds (from first message to first reply)
                     };
                 }
 
+                // Track first message timestamp per customer per day
+                if (!customerFirstMessage.has(incomingMsg.from_number)) {
+                    customerFirstMessage.set(incomingMsg.from_number, incomingMsg.timestamp);
+                }
+
                 // Check if new customer - use from_number instead of contact_id
+                // New customer = belum pernah WA (tidak ada di database sebelumnya di semua session)
                 const isNew = await this.isNewCustomer(sessionId, incomingMsg.from_number, dateStr);
                 
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
@@ -242,6 +251,7 @@ class StatisticsService {
                 // Find first reply: outgoing message to the same phone number after the incoming message
                 // IMPORTANT: Search across ALL sessions, not just the same session
                 // If message comes from session 1 and reply is sent from session 5, it should still count as replied
+                // Dibalas harus sebelum 23:59:59 hari yang sama
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, fromAI, to_number, contact_id, session_id
                     FROM messages 
@@ -254,25 +264,27 @@ class StatisticsService {
                     [
                         incomingMsg.from_number,
                         incomingMsg.timestamp,
-                        incomingMsg.timestamp + 86400
+                        dateEndWIB  // End of day (23:59:59), not 24 hours from message
                     ]
                 );
                 
                 if (replies.length > 0) {
                     const reply = replies[0];
-                    const responseTimeSeconds = reply.timestamp - incomingMsg.timestamp;
+                    // Response time = waktu dari pesan pertama customer di hari itu sampai dibalas
+                    const firstMessageTime = customerFirstMessage.get(incomingMsg.from_number);
+                    const responseTimeSeconds = reply.timestamp - firstMessageTime;
 
-                    // Only count if response time is reasonable (within 24 hours)
-                    if (responseTimeSeconds > 0 && responseTimeSeconds <= 86400) {
-                        // Store the fastest response time for this customer
+                    // Only count if response time is positive (reply after first message)
+                    if (responseTimeSeconds > 0) {
+                        // Store the response time for this customer (from first message to first reply)
+                        // If customer already has a reply recorded, keep the one with faster response time
                         const existingTime = periodCustomers[periodIndex].customerReplies.get(incomingMsg.from_number);
                         if (!existingTime || responseTimeSeconds < existingTime) {
                             periodCustomers[periodIndex].customerReplies.set(incomingMsg.from_number, responseTimeSeconds);
                         }
                     }
-                    // If reply is outside 24 hours, don't count it (customer will be counted as unreplied)
                 }
-                // If no reply found, customer will be counted as unreplied (not in customerReplies map)
+                // If no reply found before 23:59:59, customer will be counted as unreplied (not in customerReplies map)
             }
             
             // Now calculate statistics per period based on unique customers
