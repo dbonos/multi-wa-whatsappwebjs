@@ -574,7 +574,7 @@ class MessageHandler {
             
             // Get active webhooks for this session
             const [webhooks] = await pool.execute(
-                `SELECT webhook_url, events FROM webhooks 
+                `SELECT webhook_url, events, direction_filter FROM webhooks 
                 WHERE (session_id = ? OR session_id IS NULL) AND is_active = TRUE`,
                 [sessionId]
             );
@@ -587,19 +587,31 @@ class MessageHandler {
                 return;
             }
 
-            // Filter webhooks by event type
+            // Filter webhooks by event type and direction
             const eventType = data.event || 'message';
+            const messageDirection = data.message?.direction || 'incoming'; // incoming or outgoing
+            
             const filteredWebhooks = webhooks.filter(webhook => {
-                if (!webhook.events) {
-                    console.log(`🔗 [WEBHOOK] Webhook ${webhook.webhook_url} has no events filter, will receive all events`);
-                    return true; // If events is null, send all events
+                // Filter by event type
+                let matchesEvent = true;
+                if (webhook.events) {
+                    const events = typeof webhook.events === 'string' 
+                        ? JSON.parse(webhook.events) 
+                        : webhook.events;
+                    matchesEvent = Array.isArray(events) && events.includes(eventType);
                 }
-                const events = typeof webhook.events === 'string' 
-                    ? JSON.parse(webhook.events) 
-                    : webhook.events;
-                const includesEvent = Array.isArray(events) && events.includes(eventType);
-                console.log(`🔗 [WEBHOOK] Webhook ${webhook.webhook_url} events: ${JSON.stringify(events)}, includes '${eventType}': ${includesEvent}`);
-                return includesEvent;
+                
+                // Filter by direction
+                const directionFilter = webhook.direction_filter || 'both';
+                let matchesDirection = true;
+                if (directionFilter !== 'both') {
+                    matchesDirection = directionFilter === messageDirection;
+                }
+                
+                const shouldSend = matchesEvent && matchesDirection;
+                console.log(`🔗 [WEBHOOK] Webhook ${webhook.webhook_url}: event=${matchesEvent}, direction=${matchesDirection} (filter: ${directionFilter}, message: ${messageDirection}), send=${shouldSend}`);
+                
+                return shouldSend;
             });
 
             console.log(`🔗 [WEBHOOK] After filtering, ${filteredWebhooks.length} webhook(s) will receive event '${eventType}'`);

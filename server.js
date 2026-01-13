@@ -2151,11 +2151,12 @@ app.post('/api/webhooks', authenticate, async (req, res) => {
 
         // Non-admin users can only create webhooks for their own session
         const targetSessionId = req.user.role === 'admin' ? (sessionId || null) : req.user.session_id;
+        const directionFilter = req.body.directionFilter || 'both'; // incoming, outgoing, or both
 
         const [result] = await pool.execute(
-            `INSERT INTO webhooks (session_id, webhook_url, events, is_active)
-             VALUES (?, ?, ?, TRUE)`,
-            [targetSessionId, webhookUrl, JSON.stringify(events || ['message'])]
+            `INSERT INTO webhooks (session_id, webhook_url, events, direction_filter, is_active)
+             VALUES (?, ?, ?, ?, TRUE)`,
+            [targetSessionId, webhookUrl, JSON.stringify(events || ['message']), directionFilter]
         );
 
         res.json({
@@ -2172,7 +2173,7 @@ app.post('/api/webhooks', authenticate, async (req, res) => {
 app.put('/api/webhooks/:id', authenticate, async (req, res) => {
     try {
         const { id } = req.params;
-        const { webhookUrl, events, isActive } = req.body;
+        const { webhookUrl, events, isActive, directionFilter } = req.body;
 
         // Get webhook first to check permissions
         const [webhooks] = await pool.execute('SELECT * FROM webhooks WHERE id = ?', [id]);
@@ -2200,12 +2201,14 @@ app.put('/api/webhooks/:id', authenticate, async (req, res) => {
             `UPDATE webhooks 
              SET webhook_url = COALESCE(?, webhook_url),
                  events = COALESCE(?, events),
+                 direction_filter = COALESCE(?, direction_filter),
                  is_active = COALESCE(?, is_active),
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
             [
                 webhookUrl,
                 events ? JSON.stringify(events) : null,
+                directionFilter,
                 isActive,
                 id
             ]

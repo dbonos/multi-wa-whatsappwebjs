@@ -15,6 +15,7 @@ export default function WebhookSettings({ sessionId, onClose }) {
     sessionId: sessionId || '',
     webhookUrl: '',
     events: ['message'],
+    directionFilter: 'both', // incoming, outgoing, or both
     isActive: true
   });
 
@@ -60,6 +61,7 @@ export default function WebhookSettings({ sessionId, onClose }) {
         sessionId: sessionId || '',
         webhookUrl: '',
         events: ['message'],
+        directionFilter: 'both',
         isActive: true
       });
       loadWebhooks();
@@ -184,6 +186,22 @@ export default function WebhookSettings({ sessionId, onClose }) {
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium mb-1">Message Direction</label>
+            <select
+              value={formData.directionFilter}
+              onChange={(e) => setFormData({ ...formData, directionFilter: e.target.value })}
+              className="input w-full"
+            >
+              <option value="both">Both (Incoming & Outgoing)</option>
+              <option value="incoming">Incoming Only</option>
+              <option value="outgoing">Outgoing Only</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Choose which message directions to forward to this webhook
+            </p>
+          </div>
+
           <div className="flex gap-2">
             <button
               onClick={handleAdd}
@@ -259,6 +277,13 @@ export default function WebhookSettings({ sessionId, onClose }) {
                           </span>
                         </div>
                         <div>
+                          Direction: <span className="font-medium">
+                            {webhook.direction_filter === 'incoming' ? 'Incoming Only' :
+                             webhook.direction_filter === 'outgoing' ? 'Outgoing Only' :
+                             'Both (Incoming & Outgoing)'}
+                          </span>
+                        </div>
+                        <div>
                           Status: <span className={`font-medium ${webhook.is_active ? 'text-green-600' : 'text-gray-500'}`}>
                             {webhook.is_active ? 'Active' : 'Inactive'}
                           </span>
@@ -309,6 +334,7 @@ function EditWebhookForm({ webhook, sessions, isAdmin, onSave, onCancel }) {
     events: Array.isArray(webhook.events) 
       ? webhook.events 
       : (typeof webhook.events === 'string' ? JSON.parse(webhook.events) : ['message']),
+    directionFilter: webhook.direction_filter || 'both',
     isActive: webhook.is_active
   });
 
@@ -352,6 +378,22 @@ function EditWebhookForm({ webhook, sessions, isAdmin, onSave, onCancel }) {
             </label>
           ))}
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Message Direction</label>
+        <select
+          value={formData.directionFilter}
+          onChange={(e) => setFormData({ ...formData, directionFilter: e.target.value })}
+          className="input w-full"
+        >
+          <option value="both">Both (Incoming & Outgoing)</option>
+          <option value="incoming">Incoming Only</option>
+          <option value="outgoing">Outgoing Only</option>
+        </select>
+        <p className="text-xs text-gray-500 mt-1">
+          Choose which message directions to forward to this webhook
+        </p>
       </div>
 
       <div className="flex items-center gap-2">
