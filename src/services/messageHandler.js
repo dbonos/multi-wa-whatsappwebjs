@@ -98,24 +98,94 @@ class MessageHandler {
             
             if (isGroup) {
                 // Check if group is in skip list
+                // Need to check multiple formats because group_id might be stored differently
+                // Also check contact_id field in skip_messages (some entries might use contact_id instead of group_id)
                 const [skipGroups] = await pool.execute(
-                    `SELECT id FROM skip_messages 
+                    `SELECT id, group_id, contact_id FROM skip_messages 
                     WHERE session_id = ? 
                     AND type = 'group' 
-                    AND group_id = ? 
-                    AND is_active = TRUE`,
-                    [sessionId, contactId]
+                    AND is_active = TRUE
+                    AND (
+                        group_id = ? 
+                        OR contact_id = ?
+                        OR group_id LIKE CONCAT('%', ?, '%')
+                        OR contact_id LIKE CONCAT('%', ?, '%')
+                    )`,
+                    [
+                        sessionId, 
+                        contactId, 
+                        contactId,
+                        contactId.replace('@g.us', '').replace('@c.us', '').replace('@lid', ''), // Extract ID part
+                        contactId.replace('@g.us', '').replace('@c.us', '').replace('@lid', '')
+                    ]
                 );
                 
                 console.log(`🔍 [SKIP CHECK] Group skip query result:`, {
                     contactId: contactId,
                     found: skipGroups.length,
-                    skipIds: skipGroups.map(s => s.id)
+                    skipIds: skipGroups.map(s => s.id),
+                    skipGroupIds: skipGroups.map(s => s.group_id),
+                    skipContactIds: skipGroups.map(s => s.contact_id)
                 });
                 
                 if (skipGroups.length > 0) {
-                    console.log(`⏭️  [SKIP] Skipping message from group: ${contactId}`);
+                    console.log(`⏭️  [SKIP] Skipping message from group: ${contactId} (matched: ${skipGroups[0].group_id || skipGroups[0].contact_id})`);
                     return true;
+                }
+                
+                // Additional check: Look up contact in contacts table to get lid_original
+                // and check if that matches any skip_messages
+                try {
+                    const [contactCheck] = await pool.execute(
+                        `SELECT contact_id, lid_original 
+                        FROM contacts 
+                        WHERE session_id = ? 
+                        AND (contact_id = ? OR lid_original = ?)
+                        AND is_group = TRUE
+                        LIMIT 1`,
+                        [sessionId, contactId, contactId]
+                    );
+                    
+                    if (contactCheck.length > 0) {
+                        const contact = contactCheck[0];
+                        const checkContactId = contact.contact_id;
+                        const checkLidOriginal = contact.lid_original;
+                        
+                        console.log(`🔍 [SKIP CHECK] Found contact in DB:`, {
+                            contactId: checkContactId,
+                            lidOriginal: checkLidOriginal
+                        });
+                        
+                        // Check skip_messages with both contact_id and lid_original
+                        if (checkContactId || checkLidOriginal) {
+                            const [skipByContact] = await pool.execute(
+                                `SELECT id FROM skip_messages 
+                                WHERE session_id = ? 
+                                AND type = 'group' 
+                                AND is_active = TRUE
+                                AND (
+                                    group_id = ? 
+                                    OR group_id = ?
+                                    OR contact_id = ?
+                                    OR contact_id = ?
+                                )`,
+                                [
+                                    sessionId, 
+                                    checkContactId || '', 
+                                    checkLidOriginal || '',
+                                    checkContactId || '',
+                                    checkLidOriginal || ''
+                                ]
+                            );
+                            
+                            if (skipByContact.length > 0) {
+                                console.log(`⏭️  [SKIP] Skipping message from group (found via contact lookup): ${contactId} -> ${checkContactId || checkLidOriginal}`);
+                                return true;
+                            }
+                        }
+                    }
+                } catch (contactError) {
+                    console.error(`⚠️ [SKIP CHECK] Error checking contact for group skip:`, contactError.message);
                 }
             } else {
                 // Check if contact/phone is in skip list
