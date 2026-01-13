@@ -507,7 +507,16 @@ export default function Contacts() {
                                 {msg.direction}
                               </Badge>
                               <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {new Date(msg.timestamp * 1000).toLocaleString()}
+                                {new Date(msg.timestamp * 1000).toLocaleString('id-ID', {
+                                  timeZone: 'Asia/Jakarta',
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit',
+                                  hour12: false
+                                })}
                               </span>
                             </div>
                             <p className="text-gray-900 dark:text-gray-100">

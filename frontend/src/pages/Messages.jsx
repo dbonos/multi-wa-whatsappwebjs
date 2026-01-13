@@ -235,7 +235,7 @@ export default function Messages() {
     // Force console log - make sure it appears
     console.log('%c🚀 [SEND MESSAGE] ==========================================', 'color: blue; font-size: 14px; font-weight: bold');
     console.log('🚀 [SEND MESSAGE] Starting send message process...');
-    console.log('🚀 [SEND MESSAGE] Form submitted at:', new Date().toISOString());
+    console.log('🚀 [SEND MESSAGE] Form submitted at:', new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }));
     
     // Check authentication first
     const tokenFromStorage = localStorage.getItem('token');

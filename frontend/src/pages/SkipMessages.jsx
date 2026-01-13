@@ -385,7 +385,16 @@ export default function SkipMessages() {
                             <p className="text-sm text-gray-500 dark:text-gray-400">{item.description}</p>
                           )}
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                            Created: {new Date(item.created_at).toLocaleString()}
+                            Created: {new Date(item.created_at).toLocaleString('id-ID', {
+                              timeZone: 'Asia/Jakarta',
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: false
+                            })}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -445,7 +454,16 @@ export default function SkipMessages() {
                             )}
                           </div>
                           <p className="text-xs text-gray-400 dark:text-gray-500">
-                            {group.message_count || 0} messages • Last: {group.last_message_time ? new Date(group.last_message_time * 1000).toLocaleString() : 'Never'}
+                            {group.message_count || 0} messages • Last: {group.last_message_time ? new Date(group.last_message_time * 1000).toLocaleString('id-ID', {
+                              timeZone: 'Asia/Jakarta',
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: false
+                            }) : 'Never'}
                           </p>
                         </div>
                         <button

@@ -185,7 +185,16 @@ export default function MessageDetailModal({ messageId, sessionId, onClose }) {
                               <div className="flex-1">
                                 <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">{status.status}</p>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                                  {new Date(status.changed_at).toLocaleString()}
+                                  {new Date(status.changed_at).toLocaleString('id-ID', {
+                                    timeZone: 'Asia/Jakarta',
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit',
+                                    hour12: false
+                                  })}
                                 </p>
                               </div>
                             </div>
