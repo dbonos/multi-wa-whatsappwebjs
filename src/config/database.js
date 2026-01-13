@@ -55,6 +55,12 @@ pool.execute = async function(sql, params) {
     try {
         // CRITICAL: ALWAYS set timezone BEFORE executing query
         // This ensures CURRENT_TIMESTAMP in INSERT/UPDATE uses WIB
+        // Only log for INSERT/UPDATE queries to avoid spam
+        const isInsertOrUpdate = sql.trim().toUpperCase().startsWith('INSERT') || 
+                                 sql.trim().toUpperCase().startsWith('UPDATE');
+        if (isInsertOrUpdate) {
+            console.log(`🕐 [DB] Setting timezone to +07:00 before ${sql.trim().substring(0, 20)}...`);
+        }
         await connection.query("SET time_zone = '+07:00'");
         const result = await connection.execute(sql, params);
         return result;
