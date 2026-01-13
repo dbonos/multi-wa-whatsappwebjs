@@ -229,7 +229,45 @@ class StatisticsService {
             // Key: periodIndex_fromNumber -> first timestamp in that period
             const customerFirstMessagePerPeriod = new Map();
             
-            // Process each incoming message
+            // Track customers who have been replied to AT ALL during the entire day (across all periods)
+            // Key: from_number -> true if replied at any point during the day
+            const customersRepliedDuringDay = new Set();
+            
+            // First pass: Identify all customers who have been replied to during the entire day
+            const allUniqueCustomers = new Set();
+            for (const incomingMsg of incomingMessages) {
+                allUniqueCustomers.add(incomingMsg.from_number);
+            }
+            
+            // Check for replies for each unique customer during the entire day
+            for (const fromNumber of allUniqueCustomers) {
+                // Find the first incoming message from this customer on this day
+                const firstIncomingMsg = incomingMessages.find(msg => msg.from_number === fromNumber);
+                if (!firstIncomingMsg) continue;
+                
+                // Check if there's any reply to this customer during the entire day
+                const [replies] = await pool.execute(
+                    `SELECT message_id, timestamp, fromAI, to_number, contact_id, session_id
+                    FROM messages 
+                    WHERE direction = 'outgoing'
+                    AND to_number = ?
+                    AND timestamp > ?
+                    AND timestamp <= ?
+                    ORDER BY timestamp ASC
+                    LIMIT 1`,
+                    [
+                        fromNumber,
+                        firstIncomingMsg.timestamp,
+                        dateEndWIB  // End of day (23:59:59)
+                    ]
+                );
+                
+                if (replies.length > 0) {
+                    customersRepliedDuringDay.add(fromNumber);
+                }
+            }
+            
+            // Second pass: Process each incoming message and calculate response times per period
             for (const incomingMsg of incomingMessages) {
                 const periodIndex = this.getPeriodIndex(incomingMsg.timestamp, periodsArray);
                 if (periodIndex === null) {
@@ -295,7 +333,6 @@ class StatisticsService {
                         }
                     }
                 }
-                // If no reply found before 23:59:59, customer will be counted as unreplied (not in customerReplies map)
             }
             
             // Now calculate statistics per period based on unique customers
