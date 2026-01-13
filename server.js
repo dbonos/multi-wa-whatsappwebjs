@@ -66,12 +66,43 @@ app.use((req, res, next) => {
     });
 });
 
-// Rate limiting
-const limiter = rateLimit({
+// Rate limiting - General API rate limit
+const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
+    max: parseInt(process.env.API_RATE_LIMIT_MAX || '100'), // Default: 100 requests per 15 minutes
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    skip: (req) => {
+        // Skip rate limiting for WebSocket upgrade requests
+        return req.headers.upgrade === 'websocket';
+    }
 });
-app.use('/api/', limiter);
+
+// Stricter rate limit for authentication endpoints
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '10'), // Default: 10 login attempts per 15 minutes
+    message: 'Too many authentication attempts, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true, // Don't count successful requests
+});
+
+// Stricter rate limit for message sending
+const messageSendLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: parseInt(process.env.MESSAGE_RATE_LIMIT_MAX || '30'), // Default: 30 messages per minute
+    message: 'Too many messages sent, please slow down.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Apply rate limiters
+app.use('/api/', generalLimiter); // General API rate limit
+app.use('/api/auth/login', authLimiter); // Stricter for login
+app.use('/api/auth/request-otp', authLimiter); // Stricter for OTP requests
+app.use('/api/messages/send', messageSendLimiter); // Stricter for sending messages
 
 // Serve static files (frontend)
 app.use(express.static('public'));
