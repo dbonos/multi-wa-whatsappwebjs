@@ -998,10 +998,11 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         }
 
         // Save message to database FIRST (before attachment to satisfy foreign key constraint)
+        // CRITICAL: Explicitly set created_at and updated_at to ensure WIB timezone
         const [result] = await pool.execute(
             `INSERT INTO messages 
-             (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, attachment_path)
-             VALUES (?, ?, ?, ?, ?, 'outgoing', 1, ?, ?, ?, 'sent', ?, ?)`,
+             (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, attachment_path, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'outgoing', 1, ?, ?, ?, 'sent', ?, ?, CONVERT_TZ(NOW(), '+00:00', '+07:00'), CONVERT_TZ(NOW(), '+00:00', '+07:00'))`,
             [
                 sessionId,
                 sentMessage.id._serialized,
