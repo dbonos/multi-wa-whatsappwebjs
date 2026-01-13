@@ -17,14 +17,54 @@ const pool = mysql.createPool({
 
 // Wrapper to ensure timezone is set for each connection
 const originalGetConnection = pool.getConnection.bind(pool);
+const connectionsWithTimezone = new WeakSet();
+
 pool.getConnection = async function() {
     const connection = await originalGetConnection();
-    try {
-        await connection.query("SET time_zone = '+07:00'");
-    } catch (err) {
-        // Silent fail - timezone might already be set
+    // Only set timezone once per connection
+    if (!connectionsWithTimezone.has(connection)) {
+        try {
+            await connection.query("SET time_zone = '+07:00'");
+            connectionsWithTimezone.add(connection);
+        } catch (err) {
+            // Silent fail - timezone might already be set
+        }
     }
     return connection;
+};
+
+// Wrap execute() to ensure timezone is set before each query
+const originalExecute = pool.execute.bind(pool);
+pool.execute = async function(sql, params) {
+    const connection = await originalGetConnection();
+    try {
+        // Ensure timezone is set
+        if (!connectionsWithTimezone.has(connection)) {
+            await connection.query("SET time_zone = '+07:00'");
+            connectionsWithTimezone.add(connection);
+        }
+        const result = await connection.execute(sql, params);
+        return result;
+    } finally {
+        connection.release();
+    }
+};
+
+// Wrap query() to ensure timezone is set before each query
+const originalQuery = pool.query.bind(pool);
+pool.query = async function(sql, params) {
+    const connection = await originalGetConnection();
+    try {
+        // Ensure timezone is set
+        if (!connectionsWithTimezone.has(connection)) {
+            await connection.query("SET time_zone = '+07:00'");
+            connectionsWithTimezone.add(connection);
+        }
+        const result = await connection.query(sql, params);
+        return result;
+    } finally {
+        connection.release();
+    }
 };
 
 // Test connection and set timezone
