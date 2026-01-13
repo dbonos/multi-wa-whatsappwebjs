@@ -164,23 +164,30 @@ class MessageHandler {
                 hasBody: !!message.body
             });
             
-            // Check if message should be skipped
-            const shouldSkip = await this.shouldSkipMessage(sessionId, contactId, fromNumber, isGroup);
-            console.log(`📨 [MESSAGE HANDLER] Should skip: ${shouldSkip}`);
+            // Save contact first (with @lid conversion) - needed to get correct contact_id
+            const contactInfo = await this.saveContact(sessionId, contact);
+            
+            // Update fromNumber and contactId with contactInfo if available
+            // CRITICAL: Use the contact_id from saveContact (after @lid conversion) for skip check
+            const finalContactId = contactInfo?.contactId || contactId;
+            const finalFromNumber = contactInfo?.phoneNumber || fromNumber;
+            
+            // Check if message should be skipped AFTER getting correct contact_id
+            // This ensures we check with the correct contact_id (after @lid conversion)
+            const shouldSkip = await this.shouldSkipMessage(sessionId, finalContactId, finalFromNumber, isGroup);
+            console.log(`📨 [MESSAGE HANDLER] Should skip: ${shouldSkip}`, {
+                originalContactId: contactId,
+                finalContactId: finalContactId,
+                isGroup: isGroup
+            });
             
             if (shouldSkip) {
-                console.log(`⏭️  [SKIP] Message skipped (not saved to database): ${message.id._serialized} from ${isGroup ? 'group' : 'contact'} ${contactId}`);
+                console.log(`⏭️  [SKIP] Message skipped (not saved to database): ${message.id._serialized} from ${isGroup ? 'group' : 'contact'} ${finalContactId}`);
                 // Still emit via WebSocket for real-time, but don't save to DB
                 return { skipped: true, messageId: message.id._serialized };
             }
             
             console.log(`💾 [MESSAGE HANDLER] Message will be saved to database: ${message.id._serialized}`);
-            
-            // Save contact first (with @lid conversion)
-            const contactInfo = await this.saveContact(sessionId, contact);
-            
-            // Update fromNumber with contactInfo if available
-            const finalFromNumber = contactInfo?.phoneNumber || fromNumber;
             
             // Determine message type
             let messageType = 'text';

@@ -438,23 +438,40 @@ export default function SkipMessages() {
                         key={group.group_id}
                         className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Users className="w-4 h-4 text-gray-500" />
-                            <span className="font-medium">{group.name || group.pushname || 'Group'}</span>
+                        <div className="flex-1 flex items-center gap-3">
+                          {/* Profile Picture */}
+                          {group.profile_picture_url ? (
+                            <img
+                              src={group.profile_picture_url}
+                              alt={group.name || group.pushname || 'Group'}
+                              className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div className={`w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center ${group.profile_picture_url ? 'hidden' : ''}`}>
+                            <Users className="w-5 h-5 text-gray-500" />
                           </div>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">
-                            {group.message_count || 0} messages • Last: {group.last_message_time ? new Date(group.last_message_time * 1000).toLocaleString('id-ID', {
-                              timeZone: 'Asia/Jakarta',
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit',
-                              hour12: false
-                            }) : 'Never'}
-                          </p>
+                          
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium">{group.name || group.pushname || 'Group'}</span>
+                            </div>
+                            <p className="text-xs text-gray-400 dark:text-gray-500">
+                              {group.message_count || 0} messages • Last: {group.last_message_time ? new Date(group.last_message_time * 1000).toLocaleString('id-ID', {
+                                timeZone: 'Asia/Jakarta',
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                hour12: false
+                              }) : 'Never'}
+                            </p>
+                          </div>
                         </div>
                         <button
                           onClick={() => handleToggleGroup(group)}
