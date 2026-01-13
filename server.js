@@ -2374,10 +2374,21 @@ function createClient(sessionId) {
     // This ensures messages from this client are always saved with the correct sessionId
     client.on('message', async (message) => {
         try {
+            // Debug: Log all message properties to understand structure
+            console.log(`🔍 [MESSAGE EVENT] Session: ${sessionId}, Message ID: ${message.id._serialized}`);
+            console.log(`🔍 [MESSAGE EVENT] Properties:`, {
+                fromMe: message.fromMe,
+                from: message.from,
+                to: message.to,
+                hasMedia: message.hasMedia,
+                body: message.body ? message.body.substring(0, 50) : null,
+                timestamp: message.timestamp
+            });
+            
             // Check if message is from me (outgoing from mobile device)
-            if (message.fromMe) {
+            if (message.fromMe === true || message.fromMe === 1) {
                 // Outgoing message from mobile device
-                console.log(`📤 [OUTGOING MESSAGE] Session: ${sessionId}, Message ID: ${message.id._serialized}, To: ${message.to}`);
+                console.log(`📤 [OUTGOING MESSAGE] Session: ${sessionId}, Message ID: ${message.id._serialized}, To: ${message.to || 'unknown'}`);
                 
                 // Auto-save outgoing message from mobile device (will skip if destination in skip list)
                 const result = await messageHandler.saveOutgoingMessage(sessionId, message);
