@@ -48,15 +48,14 @@ pool.getConnection = async function() {
 };
 
 // Wrap execute() to ensure timezone is set before each query
+// CRITICAL: Always set timezone to ensure CURRENT_TIMESTAMP uses WIB
 const originalExecute = pool.execute.bind(pool);
 pool.execute = async function(sql, params) {
     const connection = await originalGetConnection();
     try {
-        // Ensure timezone is set
-        if (!connectionsWithTimezone.has(connection)) {
-            await connection.query("SET time_zone = '+07:00'");
-            connectionsWithTimezone.add(connection);
-        }
+        // CRITICAL: ALWAYS set timezone BEFORE executing query
+        // This ensures CURRENT_TIMESTAMP in INSERT/UPDATE uses WIB
+        await connection.query("SET time_zone = '+07:00'");
         const result = await connection.execute(sql, params);
         return result;
     } finally {
@@ -69,11 +68,8 @@ const originalQuery = pool.query.bind(pool);
 pool.query = async function(sql, params) {
     const connection = await originalGetConnection();
     try {
-        // Ensure timezone is set
-        if (!connectionsWithTimezone.has(connection)) {
-            await connection.query("SET time_zone = '+07:00'");
-            connectionsWithTimezone.add(connection);
-        }
+        // CRITICAL: ALWAYS set timezone BEFORE executing query
+        await connection.query("SET time_zone = '+07:00'");
         const result = await connection.query(sql, params);
         return result;
     } finally {
