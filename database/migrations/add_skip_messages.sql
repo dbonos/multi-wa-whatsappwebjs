@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS skip_messages (
     INDEX idx_contact_id (contact_id),
     INDEX idx_phone_number (phone_number),
     INDEX idx_is_active (is_active),
-    UNIQUE KEY unique_skip_rule (session_id, type, COALESCE(group_id, ''), COALESCE(contact_id, ''), COALESCE(phone_number, '')),
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
