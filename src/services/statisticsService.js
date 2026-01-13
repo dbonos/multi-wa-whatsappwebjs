@@ -213,6 +213,10 @@ class StatisticsService {
 
             console.log(`📊 [STATISTICS] Processing ${incomingMessages.length} incoming messages for date ${dateStr}`);
             
+            // Group messages by period and customer (from_number)
+            // Structure: periodIndex -> { new: Set<from_number>, previous: Set<from_number>, replies: Map<from_number, responseTime> }
+            const periodCustomers = {};
+            
             // Process each incoming message
             for (const incomingMsg of incomingMessages) {
                 const periodIndex = this.getPeriodIndex(incomingMsg.timestamp, periodsArray);
@@ -221,13 +225,22 @@ class StatisticsService {
                     continue;
                 }
 
+                if (!periodCustomers[periodIndex]) {
+                    periodCustomers[periodIndex] = {
+                        newCustomers: new Set(),
+                        previousCustomers: new Set(),
+                        customerReplies: new Map(), // from_number -> responseTimeSeconds
+                        customerUnreplied: new Set() // from_number
+                    };
+                }
+
                 // Check if new customer - use from_number instead of contact_id
                 const isNew = await this.isNewCustomer(sessionId, incomingMsg.from_number, dateStr);
+                
+                const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
+                customerSet.add(incomingMsg.from_number);
 
                 // Find first reply: outgoing message to the same phone number after the incoming message
-                // For incoming: from_number is the sender's phone number
-                // For outgoing: to_number is the recipient's phone number
-                // Match: incoming.from_number = outgoing.to_number
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, fromAI, to_number, contact_id
                     FROM messages 
@@ -240,36 +253,62 @@ class StatisticsService {
                     LIMIT 1`,
                     [
                         sessionId, 
-                        incomingMsg.from_number,  // Match by phone number (from_number = to_number)
-                        incomingMsg.timestamp,   // After incoming message
-                        incomingMsg.timestamp + 86400  // Within 24 hours
+                        incomingMsg.from_number,
+                        incomingMsg.timestamp,
+                        incomingMsg.timestamp + 86400
                     ]
                 );
                 
-                if (replies.length > 0) {
-                    console.log(`✅ [STATISTICS] Found reply for incoming message ${incomingMsg.message_id}: outgoing ${replies[0].message_id} (fromAI=${replies[0].fromAI})`);
-                } else {
-                    console.log(`⚠️ [STATISTICS] No reply found for incoming message ${incomingMsg.message_id} from number ${incomingMsg.from_number}`);
-                }
-
-                const stat = statistics[periodIndex];
-                const category = isNew ? stat.new_customer : stat.previous_customer;
-
                 if (replies.length > 0) {
                     const reply = replies[0];
                     const responseTimeSeconds = reply.timestamp - incomingMsg.timestamp;
 
                     // Only count if response time is reasonable (within 24 hours)
                     if (responseTimeSeconds > 0 && responseTimeSeconds <= 86400) {
-                        category.response_times.push(responseTimeSeconds);
-                        category.count++;
+                        // Store the fastest response time for this customer
+                        const existingTime = periodCustomers[periodIndex].customerReplies.get(incomingMsg.from_number);
+                        if (!existingTime || responseTimeSeconds < existingTime) {
+                            periodCustomers[periodIndex].customerReplies.set(incomingMsg.from_number, responseTimeSeconds);
+                        }
                     } else {
-                        // Message replied but outside 24 hours window - count as unreplied
-                        category.unreplied_count++;
+                        // Message replied but outside 24 hours window - mark as unreplied
+                        periodCustomers[periodIndex].customerUnreplied.add(incomingMsg.from_number);
                     }
                 } else {
-                    // No reply found - count as unreplied
-                    category.unreplied_count++;
+                    // No reply found - mark as unreplied
+                    periodCustomers[periodIndex].customerUnreplied.add(incomingMsg.from_number);
+                }
+            }
+            
+            // Now calculate statistics per period based on unique customers
+            for (const periodIndex in periodCustomers) {
+                const periodData = periodCustomers[periodIndex];
+                const stat = statistics[parseInt(periodIndex)];
+                
+                // Process new customers
+                for (const fromNumber of periodData.newCustomers) {
+                    const hasReply = periodData.customerReplies.has(fromNumber) && !periodData.customerUnreplied.has(fromNumber);
+                    
+                    if (hasReply) {
+                        const responseTime = periodData.customerReplies.get(fromNumber);
+                        stat.new_customer.response_times.push(responseTime);
+                        stat.new_customer.count++; // Count unique customer
+                    } else {
+                        stat.new_customer.unreplied_count++; // Count unique customer
+                    }
+                }
+                
+                // Process previous customers
+                for (const fromNumber of periodData.previousCustomers) {
+                    const hasReply = periodData.customerReplies.has(fromNumber) && !periodData.customerUnreplied.has(fromNumber);
+                    
+                    if (hasReply) {
+                        const responseTime = periodData.customerReplies.get(fromNumber);
+                        stat.previous_customer.response_times.push(responseTime);
+                        stat.previous_customer.count++; // Count unique customer
+                    } else {
+                        stat.previous_customer.unreplied_count++; // Count unique customer
+                    }
                 }
             }
 
