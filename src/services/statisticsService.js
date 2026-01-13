@@ -168,6 +168,8 @@ class StatisticsService {
             const dateStartWIB = Math.floor(dateObj.getTime() / 1000);
             const dateEndWIB = Math.floor(dateEndObj.getTime() / 1000);
             
+            console.log(`📊 [STATISTICS] Querying messages for date ${dateStr} (WIB timestamp range: ${dateStartWIB} to ${dateEndWIB})`);
+            
             const [incomingMessages] = await pool.execute(
                 `SELECT message_id, contact_id, timestamp, from_number
                 FROM messages 
@@ -178,6 +180,8 @@ class StatisticsService {
                 ORDER BY timestamp ASC`,
                 [sessionId, dateStartWIB, dateEndWIB]
             );
+            
+            console.log(`📊 [STATISTICS] Found ${incomingMessages.length} incoming messages for date ${dateStr}`);
 
             const statistics = periodsArray.map((period, index) => ({
                 period_index: index,
@@ -200,27 +204,54 @@ class StatisticsService {
                 }
             }));
 
+            console.log(`📊 [STATISTICS] Processing ${incomingMessages.length} incoming messages for date ${dateStr}`);
+            
             // Process each incoming message
             for (const incomingMsg of incomingMessages) {
                 const periodIndex = this.getPeriodIndex(incomingMsg.timestamp, periodsArray);
-                if (periodIndex === null) continue;
+                if (periodIndex === null) {
+                    console.warn(`⚠️ [STATISTICS] Message ${incomingMsg.message_id} at timestamp ${incomingMsg.timestamp} does not fall into any period`);
+                    continue;
+                }
 
                 // Check if new customer
                 const isNew = await this.isNewCustomer(sessionId, incomingMsg.contact_id, dateStr);
 
-                // Find first reply (outgoing, fromAI=1, has reply_to_message_id)
-                const [replies] = await pool.execute(
-                    `SELECT message_id, timestamp 
+                // Find first reply (outgoing, can be fromAI=1 OR fromAI=0)
+                // Try to find by reply_to_message_id first, then by quoted_msg_id, then any outgoing message to same contact
+                let [replies] = await pool.execute(
+                    `SELECT message_id, timestamp, fromAI, reply_to_message_id, quoted_msg_id
                     FROM messages 
                     WHERE session_id = ?
                     AND direction = 'outgoing'
-                    AND fromAI = 1
-                    AND reply_to_message_id = ?
+                    AND (reply_to_message_id = ? OR quoted_msg_id = ?)
                     AND timestamp > ?
                     ORDER BY timestamp ASC
                     LIMIT 1`,
-                    [sessionId, incomingMsg.message_id, incomingMsg.timestamp]
+                    [sessionId, incomingMsg.message_id, incomingMsg.message_id, incomingMsg.timestamp]
                 );
+                
+                // If no reply found by reply_to_message_id or quoted_msg_id, try to find any outgoing message
+                // to the same contact after the incoming message (within 24 hours)
+                if (replies.length === 0) {
+                    const [contactMessages] = await pool.execute(
+                        `SELECT message_id, timestamp, fromAI, contact_id
+                        FROM messages 
+                        WHERE session_id = ?
+                        AND direction = 'outgoing'
+                        AND contact_id = ?
+                        AND timestamp > ?
+                        AND timestamp <= ?
+                        ORDER BY timestamp ASC
+                        LIMIT 1`,
+                        [sessionId, incomingMsg.contact_id, incomingMsg.timestamp, incomingMsg.timestamp + 86400]
+                    );
+                    
+                    if (contactMessages.length > 0) {
+                        replies = contactMessages;
+                        console.log(`📊 [STATISTICS] Found reply by contact matching for message ${incomingMsg.message_id}`);
+                    }
+                }
 
                 const stat = statistics[periodIndex];
                 const category = isNew ? stat.new_customer : stat.previous_message;
@@ -244,7 +275,7 @@ class StatisticsService {
             }
 
             // Calculate averages
-            statistics.forEach(stat => {
+            statistics.forEach((stat, periodIdx) => {
                 ['new_customer', 'previous_message'].forEach(category => {
                     const data = stat[category];
                     if (data.count > 0) {
@@ -252,10 +283,15 @@ class StatisticsService {
                         data.avg_response_time_seconds = Math.round(sum / data.count);
                         data.avg_response_time_minutes = Math.round((sum / data.count) / 60 * 100) / 100;
                     }
+                    // Log statistics for debugging
+                    if (data.count > 0 || data.unreplied_count > 0) {
+                        console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}, Avg: ${data.avg_response_time_seconds}s`);
+                    }
                     delete data.response_times; // Remove raw data
                 });
             });
 
+            console.log(`✅ [STATISTICS] Statistics calculation completed for ${dateStr}`);
             return statistics;
         } catch (error) {
             console.error('Error calculating response time:', error);
