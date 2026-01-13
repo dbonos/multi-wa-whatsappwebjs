@@ -478,15 +478,17 @@ class MessageHandler {
                 event: 'message',
                 message: {
                     id: message.id._serialized,
-                    from: fromNumber,
-                    contactId: contactId,
+                    from: finalFromNumber,
+                    contactId: finalContactId, // Use finalContactId (after @lid conversion)
                     type: messageType,
                     body: message.body || caption,
                     timestamp: message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
                     attachment: attachmentPath ? {
                         path: attachmentPath,
                         type: messageType
-                    } : null
+                    } : null,
+                    direction: 'incoming',
+                    fromAI: 0
                 }
             });
 
@@ -563,12 +565,16 @@ class MessageHandler {
     // Forward message to webhook
     async forwardToWebhook(sessionId, data) {
         try {
+            console.log(`🔗 [WEBHOOK] Attempting to forward webhook for session ${sessionId}, event: ${data.event || 'message'}`);
+            
             // Get active webhooks for this session
             const [webhooks] = await pool.execute(
                 `SELECT webhook_url, events FROM webhooks 
                 WHERE (session_id = ? OR session_id IS NULL) AND is_active = TRUE`,
                 [sessionId]
             );
+
+            console.log(`🔗 [WEBHOOK] Found ${webhooks.length} active webhook(s) for session ${sessionId}`);
 
             // Fallback: If no webhooks configured, don't send anything
             if (!webhooks || webhooks.length === 0) {
@@ -579,12 +585,19 @@ class MessageHandler {
             // Filter webhooks by event type
             const eventType = data.event || 'message';
             const filteredWebhooks = webhooks.filter(webhook => {
-                if (!webhook.events) return true; // If events is null, send all events
+                if (!webhook.events) {
+                    console.log(`🔗 [WEBHOOK] Webhook ${webhook.webhook_url} has no events filter, will receive all events`);
+                    return true; // If events is null, send all events
+                }
                 const events = typeof webhook.events === 'string' 
                     ? JSON.parse(webhook.events) 
                     : webhook.events;
-                return Array.isArray(events) && events.includes(eventType);
+                const includesEvent = Array.isArray(events) && events.includes(eventType);
+                console.log(`🔗 [WEBHOOK] Webhook ${webhook.webhook_url} events: ${JSON.stringify(events)}, includes '${eventType}': ${includesEvent}`);
+                return includesEvent;
             });
+
+            console.log(`🔗 [WEBHOOK] After filtering, ${filteredWebhooks.length} webhook(s) will receive event '${eventType}'`);
 
             if (filteredWebhooks.length === 0) {
                 console.log(`ℹ️ [WEBHOOK] No webhooks configured for event '${eventType}' in session ${sessionId}`);
@@ -592,31 +605,43 @@ class MessageHandler {
             }
 
             // Forward to all matching webhooks
-            const promises = filteredWebhooks.map(webhook => 
-                axios.post(webhook.webhook_url, data, {
+            const promises = filteredWebhooks.map(webhook => {
+                console.log(`📤 [WEBHOOK] Sending to ${webhook.webhook_url}...`);
+                return axios.post(webhook.webhook_url, data, {
                     timeout: parseInt(process.env.WEBHOOK_TIMEOUT) || 5000,
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Session-Id': sessionId
                     }
+                }).then(response => {
+                    console.log(`✅ [WEBHOOK] Successfully sent to ${webhook.webhook_url}, status: ${response.status}`);
                 }).catch(err => {
                     console.error(`❌ [WEBHOOK] Error sending to ${webhook.webhook_url}:`, err.message);
-                })
-            );
+                    if (err.response) {
+                        console.error(`❌ [WEBHOOK] Response status: ${err.response.status}, data:`, err.response.data);
+                    }
+                });
+            });
 
             await Promise.allSettled(promises);
-            console.log(`✅ [WEBHOOK] Sent ${eventType} event to ${filteredWebhooks.length} webhook(s)`);
+            console.log(`✅ [WEBHOOK] Completed sending ${eventType} event to ${filteredWebhooks.length} webhook(s)`);
 
             // Mark webhook as sent
-            if (data.message) {
-                await pool.execute(
-                    `UPDATE messages SET webhook_sent = TRUE, webhook_sent_at = CURRENT_TIMESTAMP 
-                    WHERE message_id = ?`,
-                    [data.message.id]
-                );
+            if (data.message && data.message.id) {
+                try {
+                    await pool.execute(
+                        `UPDATE messages SET webhook_sent = TRUE, webhook_sent_at = CURRENT_TIMESTAMP 
+                        WHERE message_id = ?`,
+                        [data.message.id]
+                    );
+                    console.log(`✅ [WEBHOOK] Marked message ${data.message.id} as webhook_sent`);
+                } catch (updateError) {
+                    console.error(`❌ [WEBHOOK] Error updating webhook_sent flag:`, updateError.message);
+                }
             }
         } catch (error) {
             console.error('❌ [WEBHOOK] Error forwarding to webhook:', error);
+            console.error('❌ [WEBHOOK] Error stack:', error.stack);
         }
     }
 
