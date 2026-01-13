@@ -122,6 +122,31 @@ async function debugUnrepliedCalculation() {
             console.log('📋 DETAILED CUSTOMER ANALYSIS:');
             console.log('');
             
+            // First, check which customers have been replied to during the entire day (across all periods)
+            const customersRepliedDuringDay = new Set();
+            for (const fromNumber of data.customers) {
+                // Find first incoming message from this customer on this day (any period)
+                const firstIncomingMsg = incomingMessages.find(msg => msg.from_number === fromNumber);
+                if (!firstIncomingMsg) continue;
+                
+                // Check if there's any reply to this customer during the entire day
+                const [replies] = await pool.execute(
+                    `SELECT message_id, timestamp, fromAI, to_number, contact_id, session_id
+                    FROM messages 
+                    WHERE direction = 'outgoing'
+                    AND to_number = ?
+                    AND timestamp > ?
+                    AND timestamp <= ?
+                    ORDER BY timestamp ASC
+                    LIMIT 1`,
+                    [fromNumber, firstIncomingMsg.timestamp, dateEndWIB]
+                );
+                
+                if (replies.length > 0) {
+                    customersRepliedDuringDay.add(fromNumber);
+                }
+            }
+            
             for (const fromNumber of data.customers) {
                 const key = `${periodIndex}_${fromNumber}`;
                 const firstMessageTime = customerFirstMessage.get(key);
@@ -135,7 +160,7 @@ async function debugUnrepliedCalculation() {
                     data.previousCustomers.add(fromNumber);
                 }
                 
-                // Find reply
+                // Find reply for this period (for response time calculation)
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, fromAI, to_number, contact_id, session_id
                     FROM messages 
@@ -151,9 +176,15 @@ async function debugUnrepliedCalculation() {
                 const hasReply = replies.length > 0;
                 const responseTime = hasReply ? (replies[0].timestamp - firstMessageTime) : null;
                 
+                // Check if replied during entire day (not just this period)
+                const repliedDuringDay = customersRepliedDuringDay.has(fromNumber);
+                
                 if (hasReply) {
                     data.repliedCustomers.add(fromNumber);
-                } else {
+                }
+                
+                // Unreplied = not replied during entire day (not per period)
+                if (!repliedDuringDay) {
                     data.unrepliedCustomers.add(fromNumber);
                 }
                 
