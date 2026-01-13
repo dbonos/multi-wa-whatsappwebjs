@@ -2257,9 +2257,15 @@ function createClient(sessionId) {
     });
 
     // Message event (incoming)
+    // SECURITY: sessionId is bound to this closure when createClient() is called
+    // This ensures messages from this client are always saved with the correct sessionId
     client.on('message', async (message) => {
         try {
+            // Log for security audit - verify sessionId is correct
+            console.log(`📨 [INCOMING MESSAGE] Session: ${sessionId}, Message ID: ${message.id._serialized}`);
+            
             // Auto-save message dengan @lid conversion (will skip if in skip list)
+            // sessionId is from closure - guaranteed to be correct for this client
             const result = await messageHandler.saveIncomingMessage(sessionId, message);
 
             // Only emit via WebSocket if message was not skipped
