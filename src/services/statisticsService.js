@@ -287,27 +287,27 @@ class StatisticsService {
                 
                 // Process new customers
                 for (const fromNumber of periodData.newCustomers) {
-                    const hasReply = periodData.customerReplies.has(fromNumber) && !periodData.customerUnreplied.has(fromNumber);
-                    
-                    if (hasReply) {
+                    // If customer has at least one reply (in customerReplies), count as replied
+                    if (periodData.customerReplies.has(fromNumber)) {
                         const responseTime = periodData.customerReplies.get(fromNumber);
                         stat.new_customer.response_times.push(responseTime);
-                        stat.new_customer.count++; // Count unique customer
+                        stat.new_customer.count++; // Count unique customer with reply
                     } else {
-                        stat.new_customer.unreplied_count++; // Count unique customer
+                        // Customer has no replies at all
+                        stat.new_customer.unreplied_count++; // Count unique customer without reply
                     }
                 }
                 
                 // Process previous customers
                 for (const fromNumber of periodData.previousCustomers) {
-                    const hasReply = periodData.customerReplies.has(fromNumber) && !periodData.customerUnreplied.has(fromNumber);
-                    
-                    if (hasReply) {
+                    // If customer has at least one reply (in customerReplies), count as replied
+                    if (periodData.customerReplies.has(fromNumber)) {
                         const responseTime = periodData.customerReplies.get(fromNumber);
                         stat.previous_customer.response_times.push(responseTime);
-                        stat.previous_customer.count++; // Count unique customer
+                        stat.previous_customer.count++; // Count unique customer with reply
                     } else {
-                        stat.previous_customer.unreplied_count++; // Count unique customer
+                        // Customer has no replies at all
+                        stat.previous_customer.unreplied_count++; // Count unique customer without reply
                     }
                 }
             }
