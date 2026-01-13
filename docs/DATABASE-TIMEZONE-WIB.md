@@ -189,13 +189,38 @@ const wibDate = timestampToWIB(timestamp * 1000);
 const hours = wibDate.getHours(); // Uses WIB timezone
 ```
 
+## Messages Table Timestamp Fix
+
+### Migration Script
+
+A migration script (`database/migrations/fix_messages_timestamps.sql`) was created to fix existing timestamp data:
+
+1. **Records ID 1-1101**: Add 7 hours to `webhook_sent_at`, `created_at`, and `updated_at`
+2. **Records ID >= 1102**:
+   - If `webhook_sent_at` is not null: Sync `created_at` and `updated_at` hours/minutes with `webhook_sent_at` (seconds preserved)
+   - If `webhook_sent_at` is null: Sync `created_at` and `updated_at` to use the later time (hours/minutes only)
+
+### Code Fixes
+
+All message INSERT queries now explicitly set `created_at` and `updated_at` using `CONVERT_TZ(NOW(), '+00:00', '+07:00')`:
+
+- **Incoming messages** (`messageHandler.js`): Explicitly set both timestamps
+- **Outgoing messages from mobile** (`messageHandler.js`): Explicitly set both timestamps  
+- **Outgoing messages from API** (`server.js`): Explicitly set both timestamps
+
+This ensures that:
+- `created_at` is always in WIB timezone (no 7-hour delay)
+- `updated_at` matches `created_at` for new messages
+- `ON DUPLICATE KEY UPDATE` also uses WIB timezone
+
 ## Notes
 
-- **Existing Data**: Old records created before this configuration may still show UTC time
-- **New Data**: All new records will use WIB timezone
+- **Existing Data**: Migration script fixes old records (see above)
+- **New Data**: All new records will use WIB timezone with explicit `CONVERT_TZ` calls
 - **Connection Pooling**: Timezone is set before every query to handle connection reuse
 - **Performance**: Setting timezone adds minimal overhead (~1ms per query)
 - **Statistics**: All statistics calculations assume timestamps are already in WIB (no double conversion)
+- **Messages**: All message INSERT queries explicitly set `created_at` and `updated_at` to ensure WIB timezone
 
 ## Troubleshooting
 
