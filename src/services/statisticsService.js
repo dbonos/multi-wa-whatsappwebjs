@@ -198,15 +198,19 @@ class StatisticsService {
                 new_customer: {
                     response_times: [],
                     count: 0,
-                    avg_response_time_seconds: 0,
-                    avg_response_time_minutes: 0,
+                    fastest_response_time_seconds: 0,
+                    fastest_response_time_minutes: 0,
+                    slowest_response_time_seconds: 0,
+                    slowest_response_time_minutes: 0,
                     unreplied_count: 0
                 },
                 previous_customer: {
                     response_times: [],
                     count: 0,
-                    avg_response_time_seconds: 0,
-                    avg_response_time_minutes: 0,
+                    fastest_response_time_seconds: 0,
+                    fastest_response_time_minutes: 0,
+                    slowest_response_time_seconds: 0,
+                    slowest_response_time_minutes: 0,
                     unreplied_count: 0
                 }
             }));
@@ -327,18 +331,28 @@ class StatisticsService {
                 }
             }
 
-            // Calculate averages
+            // Calculate fastest and slowest response times
             statistics.forEach((stat, periodIdx) => {
                 ['new_customer', 'previous_customer'].forEach(category => {
                     const data = stat[category];
-                    if (data.count > 0) {
-                        const sum = data.response_times.reduce((a, b) => a + b, 0);
-                        data.avg_response_time_seconds = Math.round(sum / data.count);
-                        data.avg_response_time_minutes = Math.round((sum / data.count) / 60 * 100) / 100;
+                    if (data.response_times.length > 0) {
+                        // Find fastest (minimum) and slowest (maximum) response time
+                        const fastest = Math.min(...data.response_times);
+                        const slowest = Math.max(...data.response_times);
+                        
+                        data.fastest_response_time_seconds = fastest;
+                        data.fastest_response_time_minutes = Math.round((fastest / 60) * 100) / 100;
+                        
+                        data.slowest_response_time_seconds = slowest;
+                        data.slowest_response_time_minutes = Math.round((slowest / 60) * 100) / 100;
                     }
                     // Log statistics for debugging
                     if (data.count > 0 || data.unreplied_count > 0) {
-                        console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}, Avg: ${data.avg_response_time_seconds}s`);
+                        if (data.response_times.length > 0) {
+                            console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}, Fastest: ${data.fastest_response_time_seconds}s, Slowest: ${data.slowest_response_time_seconds}s`);
+                        } else {
+                            console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}`);
+                        }
                     }
                     delete data.response_times; // Remove raw data
                 });
@@ -382,11 +396,17 @@ class StatisticsService {
             
             // New Customer
             if (stat.new_customer.count > 0) {
-                const minutes = Math.floor(stat.new_customer.avg_response_time_seconds / 60);
-                const seconds = stat.new_customer.avg_response_time_seconds % 60;
                 message += `📨 New Customer:\n`;
-                message += `   • Rata-rata: ${minutes} menit ${seconds} detik\n`;
                 message += `   • Jumlah: ${stat.new_customer.count} customer\n`;
+                
+                if (stat.new_customer.fastest_response_time_seconds > 0) {
+                    const fastestMin = Math.floor(stat.new_customer.fastest_response_time_seconds / 60);
+                    const fastestSec = stat.new_customer.fastest_response_time_seconds % 60;
+                    const slowestMin = Math.floor(stat.new_customer.slowest_response_time_seconds / 60);
+                    const slowestSec = stat.new_customer.slowest_response_time_seconds % 60;
+                    message += `   • Tercepat: ${fastestMin} menit ${fastestSec} detik\n`;
+                    message += `   • Terlama: ${slowestMin} menit ${slowestSec} detik\n`;
+                }
             } else {
                 message += `📨 New Customer: Tidak ada data\n`;
             }
@@ -398,11 +418,17 @@ class StatisticsService {
 
             // Previous Customer
             if (stat.previous_customer.count > 0) {
-                const minutes = Math.floor(stat.previous_customer.avg_response_time_seconds / 60);
-                const seconds = stat.previous_customer.avg_response_time_seconds % 60;
                 message += `💬 Previous Customer:\n`;
-                message += `   • Rata-rata: ${minutes} menit ${seconds} detik\n`;
                 message += `   • Jumlah: ${stat.previous_customer.count} customer\n`;
+                
+                if (stat.previous_customer.fastest_response_time_seconds > 0) {
+                    const fastestMin = Math.floor(stat.previous_customer.fastest_response_time_seconds / 60);
+                    const fastestSec = stat.previous_customer.fastest_response_time_seconds % 60;
+                    const slowestMin = Math.floor(stat.previous_customer.slowest_response_time_seconds / 60);
+                    const slowestSec = stat.previous_customer.slowest_response_time_seconds % 60;
+                    message += `   • Tercepat: ${fastestMin} menit ${fastestSec} detik\n`;
+                    message += `   • Terlama: ${slowestMin} menit ${slowestSec} detik\n`;
+                }
             } else {
                 message += `💬 Previous Customer: Tidak ada data\n`;
             }

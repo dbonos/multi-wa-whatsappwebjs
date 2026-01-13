@@ -16,14 +16,16 @@ export function ResponseTimeChart({ data, periods }) {
     const stat = data[index] || {};
     return {
       period: period.label,
-      'New Customer': stat.new_customer?.avg_response_time_minutes || 0,
-      'Previous Customer': stat.previous_customer?.avg_response_time_minutes || 0,
+      'New Customer (Tercepat)': stat.new_customer?.fastest_response_time_minutes || 0,
+      'New Customer (Terlama)': stat.new_customer?.slowest_response_time_minutes || 0,
+      'Previous Customer (Tercepat)': stat.previous_customer?.fastest_response_time_minutes || 0,
+      'Previous Customer (Terlama)': stat.previous_customer?.slowest_response_time_minutes || 0,
     };
   });
 
   return (
     <div className="card p-4">
-      <h3 className="text-lg font-semibold mb-4">Average Response Time (Minutes)</h3>
+      <h3 className="text-lg font-semibold mb-4">Response Time - Tercepat & Terlama (Minutes)</h3>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -37,8 +39,10 @@ export function ResponseTimeChart({ data, periods }) {
             }}
           />
           <Legend />
-          <Line type="monotone" dataKey="New Customer" stroke="#25D366" strokeWidth={2} />
-          <Line type="monotone" dataKey="Previous Customer" stroke="#128C7E" strokeWidth={2} />
+          <Line type="monotone" dataKey="New Customer (Tercepat)" stroke="#25D366" strokeWidth={2} />
+          <Line type="monotone" dataKey="New Customer (Terlama)" stroke="#FF6B6B" strokeWidth={2} />
+          <Line type="monotone" dataKey="Previous Customer (Tercepat)" stroke="#128C7E" strokeWidth={2} />
+          <Line type="monotone" dataKey="Previous Customer (Terlama)" stroke="#FF8787" strokeWidth={2} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -111,8 +115,10 @@ export function PeriodComparisonChart({ data, periods }) {
             }}
           />
           <Legend />
-          <Bar yAxisId="left" dataKey="New Customer (min)" fill="#25D366" />
-          <Bar yAxisId="left" dataKey="Previous Customer (min)" fill="#128C7E" />
+          <Bar yAxisId="left" dataKey="New Customer (Tercepat)" fill="#25D366" />
+          <Bar yAxisId="left" dataKey="New Customer (Terlama)" fill="#FF6B6B" />
+          <Bar yAxisId="left" dataKey="Previous Customer (Tercepat)" fill="#128C7E" />
+          <Bar yAxisId="left" dataKey="Previous Customer (Terlama)" fill="#FF8787" />
           <Bar yAxisId="right" dataKey="New Customer Count" fill="#34B7F1" />
           <Bar yAxisId="right" dataKey="Previous Customer Count" fill="#075E54" />
           <Bar yAxisId="right" dataKey="New Customer (Tidak Dibalas)" fill="#FF6B6B" />

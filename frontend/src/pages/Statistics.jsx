@@ -262,12 +262,22 @@ export default function Statistics() {
                         <span className="text-sm font-medium">New Customer</span>
                       </div>
                       <div className="pl-6 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-3 h-3 text-gray-400" />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Rata-rata: {formatTime(stat.new_customer?.avg_response_time_seconds || 0)}
-                          </span>
-                        </div>
+                        {stat.new_customer?.fastest_response_time_seconds > 0 && (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-3 h-3 text-green-500" />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                Tercepat: {formatTime(stat.new_customer.fastest_response_time_seconds)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-3 h-3 text-red-500" />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                Terlama: {formatTime(stat.new_customer.slowest_response_time_seconds)}
+                              </span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex items-center gap-2">
                           <MessageSquare className="w-3 h-3 text-gray-400" />
                           <span className="text-sm text-gray-600 dark:text-gray-400">
