@@ -217,10 +217,11 @@ class MessageHandler {
 
             // Save message
             // Use INSERT IGNORE or ON DUPLICATE KEY UPDATE to handle duplicate message_id
+            // Incoming messages are always fromAI = 0 (not from API)
             let [result] = await pool.execute(
                 `INSERT INTO messages 
-                (session_id, message_id, from_number, to_number, contact_id, direction, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path)
-                VALUES (?, ?, ?, ?, ?, 'incoming', ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?)
+                (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path)
+                VALUES (?, ?, ?, ?, ?, 'incoming', 0, ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                 updated_at = CURRENT_TIMESTAMP`,
                 [

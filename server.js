@@ -995,8 +995,8 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         // Save message to database FIRST (before attachment to satisfy foreign key constraint)
         const [result] = await pool.execute(
             `INSERT INTO messages 
-             (session_id, message_id, from_number, to_number, contact_id, direction, message_type, body, caption, status, timestamp, attachment_path)
-             VALUES (?, ?, ?, ?, ?, 'outgoing', ?, ?, ?, 'sent', ?, ?)`,
+             (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, attachment_path)
+             VALUES (?, ?, ?, ?, ?, 'outgoing', 1, ?, ?, ?, 'sent', ?, ?)`,
             [
                 sessionId,
                 sentMessage.id._serialized,
