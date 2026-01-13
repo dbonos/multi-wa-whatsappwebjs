@@ -499,6 +499,70 @@ app.get('/api/sessions/:sessionId/qr', authenticate, async (req, res) => {
     }
 });
 
+// Restart session (stop and reinitialize)
+app.post('/api/sessions/:sessionId/restart', authenticate, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        console.log(`🔄 [RESTART SESSION] Starting restart for session: ${sessionId}`);
+        
+        // Check if user has permission (admin or own session)
+        if (req.user.role !== 'admin' && req.user.session_id !== sessionId) {
+            return res.status(403).json({ error: 'You can only restart your own session' });
+        }
+        
+        const client = clients.get(sessionId);
+
+        if (client) {
+            console.log(`🔄 [RESTART SESSION] Destroying existing client for: ${sessionId}`);
+            try {
+                await client.destroy();
+            } catch (err) {
+                console.error(`⚠️  [RESTART SESSION] Error destroying client: ${err.message}`);
+            }
+            clients.delete(sessionId);
+            console.log(`🔄 [RESTART SESSION] Client destroyed: ${sessionId}`);
+        }
+
+        qrCodes.delete(sessionId);
+        sessionStatuses.delete(sessionId);
+        console.log(`🔄 [RESTART SESSION] Cleared QR code and status: ${sessionId}`);
+
+        // Update database status
+        await pool.execute(
+            `UPDATE sessions SET status = 'initializing', updated_at = CURRENT_TIMESTAMP WHERE session_id = ?`,
+            [sessionId]
+        );
+
+        // Wait a bit before recreating
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Create new client instance
+        const newClient = createClient(sessionId);
+        clients.set(sessionId, newClient);
+        sessionStatuses.set(sessionId, 'initializing');
+
+        // Initialize client
+        console.log(`🔄 [RESTART SESSION] Initializing new client for: ${sessionId}`);
+        newClient.initialize().then(() => {
+            console.log(`✅ [RESTART SESSION] Client initialization started for: ${sessionId}`);
+        }).catch(err => {
+            console.error(`❌ [RESTART SESSION] Error initializing session ${sessionId}:`, err.message);
+            clients.delete(sessionId);
+            sessionStatuses.delete(sessionId);
+        });
+
+        console.log(`✅ [RESTART SESSION] Session ${sessionId} restart initiated`);
+        res.json({ 
+            success: true, 
+            message: `Session ${sessionId} restart initiated. Status will update shortly.`,
+            sessionId 
+        });
+    } catch (error) {
+        console.error(`❌ [RESTART SESSION] Error restarting session:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Delete session (Admin only)
 app.delete('/api/sessions/:sessionId', authenticate, requireAdmin, async (req, res) => {
     try {
