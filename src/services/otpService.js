@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 const crypto = require('crypto');
+const { getWIBTime } = require('../utils/timezone');
 
 // Generate 6-digit OTP
 const generateOTP = () => {

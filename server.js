@@ -742,7 +742,7 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 console.error(`❌ [MULTER ERROR]:`, err);
                 console.error(`❌ [MULTER ERROR] Stack:`, err.stack);
                 return res.status(400).json({ error: 'File upload error: ' + err.message });
-            }
+                    }
             
             // Handle files from req.files (multer.fields() returns object with field names as keys)
             if (req.files && typeof req.files === 'object') {
@@ -906,7 +906,7 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 isImageOrVideo: isImageOrVideo,
                 willSetCaption: !!mediaCaption && isImageOrVideo
             });
-            
+
             // WhatsApp only supports caption for images and videos
             // For documents/PDF, we need to send as separate message
             if (mediaCaption && isImageOrVideo) {

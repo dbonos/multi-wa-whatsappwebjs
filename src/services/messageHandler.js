@@ -51,7 +51,7 @@ class MessageHandler {
             } catch (err) {
                 // Profile picture not available or error - ignore
             }
-            
+
             // Save or update contact
             const [result] = await pool.execute(
                 `INSERT INTO contacts 
@@ -229,13 +229,19 @@ class MessageHandler {
     // Save outgoing message from mobile device to database
     async saveOutgoingMessage(sessionId, message) {
         try {
-            console.log(`📤 [MESSAGE HANDLER] Processing outgoing message from mobile: ${message.id._serialized} for session: ${sessionId}`);
-            
             const chat = await message.getChat();
+            const contactId = chat.id._serialized; // This is the destination (to_number)
+            
+            // Skip status messages
+            if (contactId === 'status@broadcast' || message.to === 'status@broadcast') {
+                console.log('⏭️ Skipping status message, not saving to database');
+                return { skipped: true, messageId: message.id?._serialized || 'status_message' };
+            }
+            
+            console.log(`📤 [MESSAGE HANDLER] Processing outgoing message from mobile: ${message.id._serialized} for session: ${sessionId}`);
             
             // For outgoing messages, to_number is the destination
             const isGroup = chat.isGroup || false;
-            const contactId = chat.id._serialized; // This is the destination (to_number)
             
             // Get contact (works for both group and individual)
             let contact = null;
@@ -418,6 +424,12 @@ class MessageHandler {
     // Save incoming message to database
     async saveIncomingMessage(sessionId, message) {
         try {
+            // Skip status messages
+            if (message.from === 'status@broadcast' || message.to === 'status@broadcast') {
+                console.log('⏭️ Skipping status message, not saving to database');
+                return { skipped: true, messageId: message.id?._serialized || 'status_message' };
+            }
+            
             console.log(`📨 [MESSAGE HANDLER] Processing incoming message: ${message.id._serialized} for session: ${sessionId}`);
             
             const chat = await message.getChat();
@@ -737,11 +749,11 @@ class MessageHandler {
             // Mark webhook as sent
             if (data.message && data.message.id) {
                 try {
-                    await pool.execute(
-                        `UPDATE messages SET webhook_sent = TRUE, webhook_sent_at = CURRENT_TIMESTAMP 
-                        WHERE message_id = ?`,
-                        [data.message.id]
-                    );
+                await pool.execute(
+                    `UPDATE messages SET webhook_sent = TRUE, webhook_sent_at = CURRENT_TIMESTAMP 
+                    WHERE message_id = ?`,
+                    [data.message.id]
+                );
                     console.log(`✅ [WEBHOOK] Marked message ${data.message.id} as webhook_sent`);
                 } catch (updateError) {
                     console.error(`❌ [WEBHOOK] Error updating webhook_sent flag:`, updateError.message);
