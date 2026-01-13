@@ -85,23 +85,29 @@ class StatisticsService {
      * @param {Date|string} date - Date to check (YYYY-MM-DD)
      * @returns {Promise<boolean>}
      */
-    async isNewCustomer(sessionId, contactId, date) {
+    async isNewCustomer(sessionId, fromNumber, date) {
         try {
             const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+            
+            // If fromNumber is null or empty, cannot determine - treat as not new
+            if (!fromNumber) {
+                return false;
+            }
             
             // Timestamp in database is already in WIB, so no need to add 25200
             // Convert date to timestamp range for comparison
             const dateObj = new Date(dateStr + 'T00:00:00+07:00'); // WIB timezone
             const dateStartWIB = Math.floor(dateObj.getTime() / 1000);
             
+            // Check by from_number (phone number) - more reliable than contact_id
             const [messages] = await pool.execute(
                 `SELECT id FROM messages 
                 WHERE session_id = ? 
-                AND contact_id = ? 
+                AND from_number = ? 
                 AND direction = 'incoming'
                 AND timestamp < ?
                 LIMIT 1`,
-                [sessionId, contactId, dateStartWIB]
+                [sessionId, fromNumber, dateStartWIB]
             );
 
             return messages.length === 0;
@@ -175,6 +181,7 @@ class StatisticsService {
                 FROM messages 
                 WHERE session_id = ? 
                 AND direction = 'incoming'
+                AND from_number IS NOT NULL
                 AND timestamp >= ? 
                 AND timestamp <= ?
                 ORDER BY timestamp ASC`,
@@ -214,26 +221,26 @@ class StatisticsService {
                     continue;
                 }
 
-                // Check if new customer
-                const isNew = await this.isNewCustomer(sessionId, incomingMsg.contact_id, dateStr);
+                // Check if new customer - use from_number instead of contact_id
+                const isNew = await this.isNewCustomer(sessionId, incomingMsg.from_number, dateStr);
 
-                // Find first reply: outgoing message to the same contact after the incoming message
-                // For incoming: contact_id is the sender (individual or group)
-                // For outgoing: contact_id is the recipient (same contact_id)
-                // Simple match: incoming.contact_id = outgoing.contact_id
+                // Find first reply: outgoing message to the same phone number after the incoming message
+                // For incoming: from_number is the sender's phone number
+                // For outgoing: to_number is the recipient's phone number
+                // Match: incoming.from_number = outgoing.to_number
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, fromAI, to_number, contact_id
                     FROM messages 
                     WHERE session_id = ?
                     AND direction = 'outgoing'
-                    AND contact_id = ?
+                    AND to_number = ?
                     AND timestamp > ?
                     AND timestamp <= ?
                     ORDER BY timestamp ASC
                     LIMIT 1`,
                     [
                         sessionId, 
-                        incomingMsg.contact_id,  // Match by contact_id (works for both individual and group)
+                        incomingMsg.from_number,  // Match by phone number (from_number = to_number)
                         incomingMsg.timestamp,   // After incoming message
                         incomingMsg.timestamp + 86400  // Within 24 hours
                     ]
@@ -242,7 +249,7 @@ class StatisticsService {
                 if (replies.length > 0) {
                     console.log(`✅ [STATISTICS] Found reply for incoming message ${incomingMsg.message_id}: outgoing ${replies[0].message_id} (fromAI=${replies[0].fromAI})`);
                 } else {
-                    console.log(`⚠️ [STATISTICS] No reply found for incoming message ${incomingMsg.message_id} from contact ${incomingMsg.contact_id} (${incomingMsg.from_number})`);
+                    console.log(`⚠️ [STATISTICS] No reply found for incoming message ${incomingMsg.message_id} from number ${incomingMsg.from_number}`);
                 }
 
                 const stat = statistics[periodIndex];
