@@ -68,12 +68,31 @@ const requestOTP = async (sessionId, phoneNumber, ipAddress = null, userAgent = 
         // Check rate limiting (max 3 OTP requests per 15 minutes)
         const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
         const [recentRequests] = await pool.execute(
-            'SELECT COUNT(*) as count FROM otp_requests WHERE session_id = ? AND created_at > ?',
+            'SELECT COUNT(*) as count, MIN(created_at) as oldest_request FROM otp_requests WHERE session_id = ? AND created_at > ?',
             [sessionId, fifteenMinutesAgo]
         );
 
         if (recentRequests[0].count >= 3) {
-            return { success: false, error: 'Too many OTP requests. Please try again later.' };
+            // Calculate when the oldest request will expire (15 minutes from oldest request)
+            const oldestRequest = recentRequests[0].oldest_request;
+            if (oldestRequest) {
+                const oldestRequestTime = new Date(oldestRequest);
+                const waitUntil = new Date(oldestRequestTime.getTime() + 15 * 60 * 1000);
+                const waitMinutes = Math.ceil((waitUntil - Date.now()) / (60 * 1000));
+                
+                return { 
+                    success: false, 
+                    error: `Too many OTP requests. Maximum 3 requests per 15 minutes. Please try again in ${waitMinutes} minute(s).`,
+                    retryAfter: waitUntil.toISOString(),
+                    retryAfterMinutes: waitMinutes
+                };
+            } else {
+                return { 
+                    success: false, 
+                    error: 'Too many OTP requests. Maximum 3 requests per 15 minutes. Please try again in 15 minutes.',
+                    retryAfterMinutes: 15
+                };
+            }
         }
 
         // Generate OTP

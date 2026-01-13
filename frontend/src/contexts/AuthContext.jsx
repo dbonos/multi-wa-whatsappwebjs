@@ -100,6 +100,8 @@ export const AuthProvider = ({ children }) => {
       return {
         success: false,
         error: error.response?.data?.error || 'Failed to request OTP',
+        retryAfter: error.response?.data?.retryAfter || null,
+        retryAfterMinutes: error.response?.data?.retryAfterMinutes || null,
       };
     }
   };

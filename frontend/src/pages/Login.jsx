@@ -16,6 +16,8 @@ export default function Login() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [retryAfter, setRetryAfter] = useState(null);
+  const [retryAfterMinutes, setRetryAfterMinutes] = useState(null);
   const { login, requestOTP } = useAuth();
   const navigate = useNavigate();
 
@@ -32,9 +34,13 @@ export default function Login() {
 
     if (result.success) {
       setOtpRequested(true);
+      setRetryAfter(null);
+      setRetryAfterMinutes(null);
       toast.success('OTP sent successfully! Check your WhatsApp.');
     } else {
       setError(result.error || 'Failed to request OTP');
+      setRetryAfter(result.retryAfter || null);
+      setRetryAfterMinutes(result.retryAfterMinutes || null);
       toast.error(result.error || 'Failed to request OTP');
     }
 
@@ -197,10 +203,19 @@ export default function Login() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2"
+                  className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
                 >
-                  <Lock className="w-5 h-5" />
-                  <span>{error}</span>
+                  <div className="flex items-start gap-2">
+                    <Lock className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p>{error}</p>
+                      {retryAfterMinutes && retryAfterMinutes > 0 && (
+                        <p className="text-sm mt-1 text-red-600">
+                          ⏱️ Please wait {retryAfterMinutes} minute{retryAfterMinutes !== 1 ? 's' : ''} before requesting OTP again.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

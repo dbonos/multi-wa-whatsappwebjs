@@ -233,7 +233,11 @@ app.post('/api/auth/request-otp', async (req, res) => {
         const result = await otpService.requestOTP(sessionName, sessionName, ipAddress, userAgent);
 
         if (!result.success) {
-            return res.status(400).json({ error: result.error });
+            return res.status(429).json({ 
+                error: result.error,
+                retryAfter: result.retryAfter || null,
+                retryAfterMinutes: result.retryAfterMinutes || 15
+            });
         }
 
         // Send OTP via WhatsApp if client is ready
