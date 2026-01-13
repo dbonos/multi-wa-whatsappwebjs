@@ -162,25 +162,59 @@ class MessageHandler {
             console.log(`📤 [MESSAGE HANDLER] Processing outgoing message from mobile: ${message.id._serialized} for session: ${sessionId}`);
             
             const chat = await message.getChat();
-            const contact = await chat.getContact ? await chat.getContact() : null;
             
             // For outgoing messages, to_number is the destination
             const isGroup = chat.isGroup || false;
             const contactId = chat.id._serialized; // This is the destination (to_number)
-            const toNumber = isGroup ? null : (contact?.number || (contactId.includes('@c.us') ? contactId.replace('@c.us', '') : null));
+            
+            // Get contact (works for both group and individual)
+            let contact = null;
+            let toNumber = null;
+            try {
+                if (!isGroup && typeof chat.getContact === 'function') {
+                    contact = await chat.getContact();
+                    toNumber = contact?.number || (contactId.includes('@c.us') ? contactId.replace('@c.us', '') : null);
+                } else if (!isGroup) {
+                    // Fallback: extract number from contactId
+                    toNumber = contactId.includes('@c.us') ? contactId.replace('@c.us', '') : null;
+                }
+            } catch (err) {
+                console.log(`⚠️ [MESSAGE HANDLER] Error getting contact for outgoing message:`, err.message);
+                if (!isGroup) {
+                    toNumber = contactId.includes('@c.us') ? contactId.replace('@c.us', '') : null;
+                }
+            }
             
             console.log(`📤 [MESSAGE HANDLER] Outgoing message details:`, {
                 messageId: message.id._serialized,
                 contactId: contactId,
                 toNumber: toNumber,
                 isGroup: isGroup,
-                hasBody: !!message.body
+                hasBody: !!message.body,
+                hasContact: !!contact
             });
             
             // Save contact first (with @lid conversion) - needed to get correct contact_id
+            // For groups, we still need to save the group contact info
             let contactInfo = null;
             if (contact) {
                 contactInfo = await this.saveContact(sessionId, contact);
+            } else if (isGroup) {
+                // For groups, create a minimal contact object to save group info
+                try {
+                    const groupContact = {
+                        id: { _serialized: contactId },
+                        name: chat.name || null,
+                        pushname: chat.name || null,
+                        number: null,
+                        isBusiness: false,
+                        isMyContact: false,
+                        isGroup: true
+                    };
+                    contactInfo = await this.saveContact(sessionId, groupContact);
+                } catch (groupErr) {
+                    console.log(`⚠️ [MESSAGE HANDLER] Error saving group contact:`, groupErr.message);
+                }
             }
             
             // Update contactId with contactInfo if available
@@ -531,13 +565,34 @@ class MessageHandler {
         try {
             // Get active webhooks for this session
             const [webhooks] = await pool.execute(
-                `SELECT webhook_url FROM webhooks 
+                `SELECT webhook_url, events FROM webhooks 
                 WHERE (session_id = ? OR session_id IS NULL) AND is_active = TRUE`,
                 [sessionId]
             );
 
-            // Forward to all webhooks
-            const promises = webhooks.map(webhook => 
+            // Fallback: If no webhooks configured, don't send anything
+            if (!webhooks || webhooks.length === 0) {
+                console.log(`ℹ️ [WEBHOOK] No webhooks configured for session ${sessionId}, skipping webhook send`);
+                return;
+            }
+
+            // Filter webhooks by event type
+            const eventType = data.event || 'message';
+            const filteredWebhooks = webhooks.filter(webhook => {
+                if (!webhook.events) return true; // If events is null, send all events
+                const events = typeof webhook.events === 'string' 
+                    ? JSON.parse(webhook.events) 
+                    : webhook.events;
+                return Array.isArray(events) && events.includes(eventType);
+            });
+
+            if (filteredWebhooks.length === 0) {
+                console.log(`ℹ️ [WEBHOOK] No webhooks configured for event '${eventType}' in session ${sessionId}`);
+                return;
+            }
+
+            // Forward to all matching webhooks
+            const promises = filteredWebhooks.map(webhook => 
                 axios.post(webhook.webhook_url, data, {
                     timeout: parseInt(process.env.WEBHOOK_TIMEOUT) || 5000,
                     headers: {
@@ -545,11 +600,12 @@ class MessageHandler {
                         'X-Session-Id': sessionId
                     }
                 }).catch(err => {
-                    console.error(`Webhook error for ${webhook.webhook_url}:`, err.message);
+                    console.error(`❌ [WEBHOOK] Error sending to ${webhook.webhook_url}:`, err.message);
                 })
             );
 
             await Promise.allSettled(promises);
+            console.log(`✅ [WEBHOOK] Sent ${eventType} event to ${filteredWebhooks.length} webhook(s)`);
 
             // Mark webhook as sent
             if (data.message) {
@@ -560,7 +616,7 @@ class MessageHandler {
                 );
             }
         } catch (error) {
-            console.error('Error forwarding to webhook:', error);
+            console.error('❌ [WEBHOOK] Error forwarding to webhook:', error);
         }
     }
 
