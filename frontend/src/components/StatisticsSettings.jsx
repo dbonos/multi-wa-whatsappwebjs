@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Plus, Trash2, Save, X, Clock, Phone, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function StatisticsSettings({ sessionId, onClose }) {
+export default function StatisticsSettings({ sessionId, onClose, onSave }) {
   const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -110,6 +110,12 @@ export default function StatisticsSettings({ sessionId, onClose }) {
       setSaving(true);
       await statisticsAPI.updateSettings(sessionId, settings);
       toast.success('Settings saved successfully');
+      
+      // Call onSave callback with new periods to refresh statistics
+      if (onSave) {
+        onSave(settings.periods);
+      }
+      
       if (onClose) onClose();
     } catch (error) {
       console.error('Failed to save settings:', error);

@@ -103,6 +103,11 @@ export default function Statistics() {
     }
   };
 
+  const handleSettingsSave = (newPeriods) => {
+    // Refresh statistics to get updated periods from backend
+    loadStatistics();
+  };
+
   const formatTime = (seconds) => {
     if (!seconds || seconds === 0) return '0 menit';
     const minutes = Math.floor(seconds / 60);
@@ -164,6 +169,7 @@ export default function Statistics() {
           <StatisticsSettings
             sessionId={selectedSession}
             onClose={() => setShowSettings(false)}
+            onSave={handleSettingsSave}
           />
         </motion.div>
       )}
