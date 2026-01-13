@@ -75,6 +75,13 @@ class MessageHandler {
     // Check if message should be skipped (not saved to database)
     async shouldSkipMessage(sessionId, contactId, fromNumber, isGroup) {
         try {
+            console.log(`🔍 [SKIP CHECK] Checking skip list for:`, {
+                sessionId: sessionId,
+                contactId: contactId,
+                fromNumber: fromNumber,
+                isGroup: isGroup
+            });
+            
             if (isGroup) {
                 // Check if group is in skip list
                 const [skipGroups] = await pool.execute(
@@ -85,6 +92,13 @@ class MessageHandler {
                     AND is_active = TRUE`,
                     [sessionId, contactId]
                 );
+                
+                console.log(`🔍 [SKIP CHECK] Group skip query result:`, {
+                    contactId: contactId,
+                    found: skipGroups.length,
+                    skipIds: skipGroups.map(s => s.id)
+                });
+                
                 if (skipGroups.length > 0) {
                     console.log(`⏭️  [SKIP] Skipping message from group: ${contactId}`);
                     return true;
@@ -103,15 +117,27 @@ class MessageHandler {
                     )`,
                     [sessionId, contactId, contactId, fromNumber, fromNumber]
                 );
+                
+                console.log(`🔍 [SKIP CHECK] Contact skip query result:`, {
+                    contactId: contactId,
+                    fromNumber: fromNumber,
+                    found: skipContacts.length,
+                    skipIds: skipContacts.map(s => s.id)
+                });
+                
                 if (skipContacts.length > 0) {
                     console.log(`⏭️  [SKIP] Skipping message from contact: ${contactId} (${fromNumber})`);
                     return true;
                 }
             }
+            
+            console.log(`✅ [SKIP CHECK] Message should NOT be skipped - will save to database`);
             return false;
         } catch (error) {
-            console.error('Error checking skip list:', error);
+            console.error(`❌ [SKIP CHECK] Error checking skip list:`, error);
+            console.error(`❌ [SKIP CHECK] Error stack:`, error.stack);
             // If error, don't skip (save message to be safe)
+            console.log(`⚠️ [SKIP CHECK] Error occurred, defaulting to NOT skip (save message)`);
             return false;
         }
     }
@@ -119,6 +145,8 @@ class MessageHandler {
     // Save incoming message to database
     async saveIncomingMessage(sessionId, message) {
         try {
+            console.log(`📨 [MESSAGE HANDLER] Processing incoming message: ${message.id._serialized} for session: ${sessionId}`);
+            
             const chat = await message.getChat();
             const contact = await message.getContact();
             
@@ -127,13 +155,25 @@ class MessageHandler {
             const contactId = contact.id._serialized;
             const fromNumber = contact.number || null;
             
+            console.log(`📨 [MESSAGE HANDLER] Message details:`, {
+                messageId: message.id._serialized,
+                contactId: contactId,
+                fromNumber: fromNumber,
+                isGroup: isGroup,
+                hasBody: !!message.body
+            });
+            
             // Check if message should be skipped
             const shouldSkip = await this.shouldSkipMessage(sessionId, contactId, fromNumber, isGroup);
+            console.log(`📨 [MESSAGE HANDLER] Should skip: ${shouldSkip}`);
+            
             if (shouldSkip) {
-                console.log(`⏭️  [SKIP] Message skipped (not saved to database): ${message.id._serialized}`);
+                console.log(`⏭️  [SKIP] Message skipped (not saved to database): ${message.id._serialized} from ${isGroup ? 'group' : 'contact'} ${contactId}`);
                 // Still emit via WebSocket for real-time, but don't save to DB
                 return { skipped: true, messageId: message.id._serialized };
             }
+            
+            console.log(`💾 [MESSAGE HANDLER] Message will be saved to database: ${message.id._serialized}`);
             
             // Save contact first (with @lid conversion)
             const contactInfo = await this.saveContact(sessionId, contact);
@@ -225,10 +265,18 @@ class MessageHandler {
                 }
             });
 
-            return result.insertId;
+            console.log(`✅ [MESSAGE HANDLER] Message saved successfully: ${message.id._serialized}, insertId: ${result.insertId}`);
+            return { success: true, insertId: result.insertId, messageId: message.id._serialized };
         } catch (error) {
-            console.error('Error saving incoming message:', error);
-            return null;
+            console.error(`❌ [MESSAGE HANDLER] Error saving incoming message:`, error);
+            console.error(`❌ [MESSAGE HANDLER] Error stack:`, error.stack);
+            console.error(`❌ [MESSAGE HANDLER] Message details:`, {
+                sessionId: sessionId,
+                messageId: message.id._serialized,
+                contactId: contactId,
+                fromNumber: fromNumber
+            });
+            return { success: false, error: error.message };
         }
     }
 
