@@ -182,10 +182,31 @@ class StatisticsService {
      * @returns {number|null} Period index or null if not in any period
      */
     getPeriodIndex(created_at, periods) {
-        // Convert created_at to Date object (already in WIB)
-        const date = created_at instanceof Date ? created_at : new Date(created_at);
-        const hours = date.getHours();
-        const minutes = date.getMinutes();
+        // Parse datetime string directly to avoid timezone conversion issues
+        // Format: "YYYY-MM-DD HH:mm:ss" (already in WIB)
+        let hours, minutes;
+        
+        if (created_at instanceof Date) {
+            // If it's already a Date object, use it directly
+            hours = created_at.getHours();
+            minutes = created_at.getMinutes();
+        } else if (typeof created_at === 'string') {
+            // Parse string directly: "2026-01-13 00:26:44" -> extract HH:mm
+            // This avoids timezone conversion when TZ=Asia/Jakarta is set
+            const timeMatch = created_at.match(/(\d{2}):(\d{2}):\d{2}/);
+            if (timeMatch) {
+                hours = parseInt(timeMatch[1], 10);
+                minutes = parseInt(timeMatch[2], 10);
+            } else {
+                // Fallback to Date parsing if format doesn't match
+                const date = new Date(created_at);
+                hours = date.getHours();
+                minutes = date.getMinutes();
+            }
+        } else {
+            return null;
+        }
+        
         const totalMinutes = hours * 60 + minutes;
 
         for (let i = 0; i < periods.length; i++) {
