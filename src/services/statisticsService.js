@@ -87,16 +87,17 @@ class StatisticsService {
      */
     /**
      * Check if customer is new for a specific period
-     * New customer = from_number yang baru, belum pernah ada di periode itu, periode sebelumnya di hari itu dan hari sebelumnya
-     * Previous customer = sudah pernah ada di periode itu, periode sebelumnya di hari itu dan hari sebelumnya
+     * New customer = from_number yang baru, belum pernah ada di periode sebelumnya di hari itu dan hari sebelumnya
+     * Previous customer = sudah pernah ada di periode sebelumnya di hari itu atau hari sebelumnya
      * @param {string} sessionId - Session ID
      * @param {string} fromNumber - Customer phone number
      * @param {string} dateStr - Date string (YYYY-MM-DD)
      * @param {number} currentPeriodIndex - Current period index (0, 1, 2, ...)
      * @param {Array} periodsArray - All periods configuration
+     * @param {Array} allIncomingMessagesToday - All incoming messages for today (to check previous periods efficiently)
      * @returns {Promise<boolean>} True if new customer for this period
      */
-    async isNewCustomerForPeriod(sessionId, fromNumber, dateStr, currentPeriodIndex, periodsArray) {
+    async isNewCustomerForPeriod(sessionId, fromNumber, dateStr, currentPeriodIndex, periodsArray, allIncomingMessagesToday) {
         try {
             if (!fromNumber) {
                 return false;
@@ -106,31 +107,17 @@ class StatisticsService {
             // 1. Previous periods in the same day (periods with index < currentPeriodIndex)
             // 2. Any period in previous days (before dateStr)
             
-            // Check previous periods in the same day
-            if (currentPeriodIndex > 0) {
-                // Get all previous periods' time ranges
-                const previousPeriods = periodsArray.slice(0, currentPeriodIndex);
-                const periodConditions = previousPeriods.map((period, idx) => {
-                    const startTime = period.start + ':00';
-                    const endTime = period.end === '23:59' ? '23:59:59' : period.end + ':00';
-                    return `(TIME(created_at) >= '${startTime}' AND TIME(created_at) < '${endTime}')`;
-                }).join(' OR ');
-                
-                if (periodConditions) {
-                    const [messagesInPreviousPeriods] = await pool.execute(
-                        `SELECT id FROM messages 
-                        WHERE session_id = ?
-                        AND from_number = ? 
-                        AND direction = 'incoming'
-                        AND DATE(created_at) = ?
-                        AND (${periodConditions})
-                        LIMIT 1`,
-                        [sessionId, fromNumber, dateStr]
-                    );
-                    
-                    if (messagesInPreviousPeriods.length > 0) {
-                        // Customer appeared in previous periods of the same day = previous customer
-                        return false;
+            // Check previous periods in the same day using already-fetched messages
+            if (currentPeriodIndex > 0 && allIncomingMessagesToday) {
+                // Check messages in previous periods (index < currentPeriodIndex)
+                for (const msg of allIncomingMessagesToday) {
+                    if (msg.from_number === fromNumber && msg.created_at) {
+                        const msgPeriodIndex = this.getPeriodIndex(msg.created_at, periodsArray);
+                        if (msgPeriodIndex !== null && msgPeriodIndex < currentPeriodIndex) {
+                            // Customer appeared in a previous period of the same day = previous customer
+                            console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} found in period ${msgPeriodIndex} (current: ${currentPeriodIndex})`);
+                            return false;
+                        }
                     }
                 }
             }
@@ -149,10 +136,12 @@ class StatisticsService {
             
             if (messagesInPreviousDays.length > 0) {
                 // Customer appeared in previous days = previous customer
+                console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} found in previous days`);
                 return false;
             }
             
             // Customer has never appeared before = new customer
+            console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} is NEW for period ${currentPeriodIndex}`);
             return true;
         } catch (error) {
             console.error('Error checking new customer for period:', error);
@@ -398,8 +387,8 @@ class StatisticsService {
             
             // Fourth pass: Assign customers to periods and categorize as new/previous
             // Use created_at for period determination
-            // New customer = belum pernah ada di periode itu, periode sebelumnya di hari itu dan hari sebelumnya
-            // Previous customer = sudah pernah ada di periode itu, periode sebelumnya di hari itu dan hari sebelumnya
+            // New customer = belum pernah ada di periode sebelumnya di hari itu dan hari sebelumnya
+            // Previous customer = sudah pernah ada di periode sebelumnya di hari itu atau hari sebelumnya
             for (const incomingMsg of incomingMessages) {
                 // Skip if created_at is missing
                 if (!incomingMsg.created_at) {
@@ -412,13 +401,14 @@ class StatisticsService {
                 }
 
                 // Check if new customer for this period
-                // New customer = belum pernah ada di periode sebelumnya (hari itu) dan hari sebelumnya
+                // Pass allIncomingMessagesToday to avoid re-querying database
                 const isNew = await this.isNewCustomerForPeriod(
                     sessionId, 
                     incomingMsg.from_number, 
                     dateStr, 
                     periodIndex, 
-                    periodsArray
+                    periodsArray,
+                    incomingMessages // Pass all messages for today to check previous periods efficiently
                 );
                 
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
