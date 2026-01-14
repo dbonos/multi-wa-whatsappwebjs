@@ -426,26 +426,27 @@ class StatisticsService {
                         const fastest = Math.min(...data.response_times);
                         const slowest = Math.max(...data.response_times);
                         
-                        // Calculate average
+                        // Calculate average (response times are in SECONDS)
                         const sum = data.response_times.reduce((a, b) => a + b, 0);
                         const avg = Math.round(sum / data.response_times.length);
                         
+                        // Store in seconds
                         data.fastest_response_time_seconds = fastest;
-                        data.fastest_response_time_minutes = Math.round((fastest / 60) * 100) / 100;
-                        
                         data.avg_response_time_seconds = avg;
-                        data.avg_response_time_minutes = Math.round((avg / 60) * 100) / 100;
-                        
                         data.slowest_response_time_seconds = slowest;
+                        
+                        // Convert to minutes for display (seconds / 60)
+                        // Round to 2 decimal places
+                        data.fastest_response_time_minutes = Math.round((fastest / 60) * 100) / 100;
+                        data.avg_response_time_minutes = Math.round((avg / 60) * 100) / 100;
                         data.slowest_response_time_minutes = Math.round((slowest / 60) * 100) / 100;
+                        
+                        // Log for debugging (show both seconds and minutes)
+                        console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}, Fastest: ${data.fastest_response_time_minutes} min (${fastest}s), Avg: ${data.avg_response_time_minutes} min (${avg}s), Slowest: ${data.slowest_response_time_minutes} min (${slowest}s)`);
                     }
-                    // Log statistics for debugging
-                    if (data.count > 0 || data.unreplied_count > 0) {
-                        if (data.response_times.length > 0) {
-                            console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}, Fastest: ${data.fastest_response_time_seconds}s, Avg: ${data.avg_response_time_seconds}s, Slowest: ${data.slowest_response_time_seconds}s`);
-                        } else {
-                            console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}`);
-                        }
+                    // Log statistics for debugging (if no replies)
+                    if (data.count > 0 && data.response_times.length === 0) {
+                        console.log(`📊 [STATISTICS] Period ${periodIdx} (${stat.period_label}): ${category} - Count: ${data.count}, Unreplied: ${data.unreplied_count}, No replies`);
                     }
                     delete data.response_times; // Remove raw data
                 });
