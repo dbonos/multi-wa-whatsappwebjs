@@ -4,7 +4,6 @@ const fs = require('fs').promises;
 const path = require('path');
 const { getWIBTime, getWIBTimestamp, getWIBToday, formatWIBDisplay, convertUTCToWIBTimestamp } = require('../utils/timezone');
 const { buildAttachmentUrl } = require('../utils/attachments');
-const { buildAttachmentUrl } = require('../utils/attachments');
 
 class MessageHandler {
     constructor() {
