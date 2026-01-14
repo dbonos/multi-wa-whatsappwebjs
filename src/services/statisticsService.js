@@ -85,36 +85,77 @@ class StatisticsService {
      * @param {Date|string} date - Date to check (YYYY-MM-DD)
      * @returns {Promise<boolean>}
      */
-    async isNewCustomer(sessionId, fromNumber, date) {
+    /**
+     * Check if customer is new for a specific period
+     * New customer = from_number yang baru, belum pernah ada di periode itu, periode sebelumnya di hari itu dan hari sebelumnya
+     * Previous customer = sudah pernah ada di periode itu, periode sebelumnya di hari itu dan hari sebelumnya
+     * @param {string} sessionId - Session ID
+     * @param {string} fromNumber - Customer phone number
+     * @param {string} dateStr - Date string (YYYY-MM-DD)
+     * @param {number} currentPeriodIndex - Current period index (0, 1, 2, ...)
+     * @param {Array} periodsArray - All periods configuration
+     * @returns {Promise<boolean>} True if new customer for this period
+     */
+    async isNewCustomerForPeriod(sessionId, fromNumber, dateStr, currentPeriodIndex, periodsArray) {
         try {
-            const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
-            
-            // If fromNumber is null or empty, cannot determine - treat as not new
             if (!fromNumber) {
                 return false;
             }
             
-            // Timestamp in database is already in WIB, so no need to add 25200
-            // Convert date to timestamp range for comparison
-            const dateObj = new Date(dateStr + 'T00:00:00+07:00'); // WIB timezone
-            const dateStartWIB = Math.floor(dateObj.getTime() / 1000);
+            // Check if customer has appeared in:
+            // 1. Previous periods in the same day (periods with index < currentPeriodIndex)
+            // 2. Any period in previous days (before dateStr)
             
-            // Check by from_number (phone number) across ALL sessions
-            // New customer = belum pernah WA (tidak ada di database sebelumnya di semua session)
-            // Use created_at for comparison (more readable)
+            // Check previous periods in the same day
+            if (currentPeriodIndex > 0) {
+                // Get all previous periods' time ranges
+                const previousPeriods = periodsArray.slice(0, currentPeriodIndex);
+                const periodConditions = previousPeriods.map((period, idx) => {
+                    const startTime = period.start + ':00';
+                    const endTime = period.end === '23:59' ? '23:59:59' : period.end + ':00';
+                    return `(TIME(created_at) >= '${startTime}' AND TIME(created_at) < '${endTime}')`;
+                }).join(' OR ');
+                
+                if (periodConditions) {
+                    const [messagesInPreviousPeriods] = await pool.execute(
+                        `SELECT id FROM messages 
+                        WHERE session_id = ?
+                        AND from_number = ? 
+                        AND direction = 'incoming'
+                        AND DATE(created_at) = ?
+                        AND (${periodConditions})
+                        LIMIT 1`,
+                        [sessionId, fromNumber, dateStr]
+                    );
+                    
+                    if (messagesInPreviousPeriods.length > 0) {
+                        // Customer appeared in previous periods of the same day = previous customer
+                        return false;
+                    }
+                }
+            }
+            
+            // Check previous days (any period)
             const dateStartDatetime = dateStr + ' 00:00:00';
-            const [messages] = await pool.execute(
+            const [messagesInPreviousDays] = await pool.execute(
                 `SELECT id FROM messages 
-                WHERE from_number = ? 
+                WHERE session_id = ?
+                AND from_number = ? 
                 AND direction = 'incoming'
                 AND created_at < ?
                 LIMIT 1`,
-                [fromNumber, dateStartDatetime]
+                [sessionId, fromNumber, dateStartDatetime]
             );
-
-            return messages.length === 0;
+            
+            if (messagesInPreviousDays.length > 0) {
+                // Customer appeared in previous days = previous customer
+                return false;
+            }
+            
+            // Customer has never appeared before = new customer
+            return true;
         } catch (error) {
-            console.error('Error checking new customer:', error);
+            console.error('Error checking new customer for period:', error);
             return false; // Default to false on error
         }
     }
