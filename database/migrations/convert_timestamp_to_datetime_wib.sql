@@ -6,11 +6,14 @@
 --   "values stored in DB are already WIB".
 --
 -- IMPORTANT:
--- - We set session time_zone to +07:00 BEFORE altering, so existing TIMESTAMP values are converted to
---   the SAME WIB wall-clock time when stored as DATETIME.
+-- - In this project, historical `messages.created_at` TIMESTAMP values were written as WIB wall-clock values
+--   while the MySQL session time_zone was effectively UTC (or values were inserted via CONVERT_TZ into TIMESTAMP).
+--   That means reading with session `+00:00` matched the "WIB wall-clock" you see in DB.
+-- - Therefore, we set session time_zone to +00:00 BEFORE altering so the wall-clock values are preserved when
+--   converting TIMESTAMP -> DATETIME (no extra +7 hours shift).
 --
 USE wa_manager;
-SET time_zone = '+07:00';
+SET time_zone = '+00:00';
 
 -- messages
 ALTER TABLE messages
