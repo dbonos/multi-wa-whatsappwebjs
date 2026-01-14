@@ -36,29 +36,31 @@ const originalGetConnection = pool.getConnection.bind(pool);
 // Timezone is only needed for INSERT/UPDATE operations
 // Setting it globally causes double offset when reading DATETIME columns
 
-// Wrap execute() to ensure CURRENT_TIMESTAMP uses WIB for INSERT/UPDATE
-// NOTE: SET time_zone only for write operations, not SELECT (causes double offset on read)
+/**
+ * Ensure every pooled connection uses WIB (+07:00) consistently.
+ *
+ * IMPORTANT:
+ * - `messages.created_at` is a TIMESTAMP column, so MySQL converts values based on the connection/session time_zone.
+ * - Previously we only did `SET time_zone` for write queries; then the same connection could be reused for SELECT,
+ *   causing inconsistent reads (sometimes WIB, sometimes SYSTEM/UTC), which broke DATE(created_at)=? filtering and periods.
+ *
+ * Strategy:
+ * - Set `time_zone = '+07:00'` ONCE per pooled connection (cached via a flag) for both reads and writes.
+ * - Do NOT replace CURRENT_TIMESTAMP; with session time_zone set, CURRENT_TIMESTAMP/NOW() are already WIB.
+ */
+async function ensureWibTimezone(connection) {
+    if (connection.__wibTimeZoneSet) return;
+    await connection.query("SET time_zone = '+07:00'");
+    connection.__wibTimeZoneSet = true;
+}
+
+// Wrap execute() so every connection is consistently WIB
 const originalExecute = pool.execute.bind(pool);
 pool.execute = async function(sql, params) {
     const connection = await originalGetConnection();
     try {
-        let modifiedSql = sql;
-        const upperSql = sql.toUpperCase().trim();
-        const isWriteQuery = upperSql.startsWith('INSERT') || upperSql.startsWith('UPDATE') || upperSql.startsWith('REPLACE');
-        
-        // Only set timezone for write queries (INSERT/UPDATE)
-        // This ensures NOW() and CURRENT_TIMESTAMP use WIB
-        // Do NOT set for SELECT - data is already stored in WIB
-        if (isWriteQuery) {
-            await connection.query("SET time_zone = '+07:00'");
-            
-            // For INSERT/UPDATE queries with CURRENT_TIMESTAMP, replace with explicit WIB conversion
-            if (sql.includes('CURRENT_TIMESTAMP')) {
-                modifiedSql = sql.replace(/CURRENT_TIMESTAMP/g, "CONVERT_TZ(NOW(), '+00:00', '+07:00')");
-            }
-        }
-        
-        const result = await connection.execute(modifiedSql, params);
+        await ensureWibTimezone(connection);
+        const result = await connection.execute(sql, params);
         return result;
     } catch (error) {
         console.error(`❌ [DB] Error in execute wrapper:`, error.message);
@@ -68,27 +70,13 @@ pool.execute = async function(sql, params) {
     }
 };
 
-// Wrap query() to ensure CURRENT_TIMESTAMP uses WIB for INSERT/UPDATE
-// NOTE: SET time_zone only for write operations, not SELECT (causes double offset on read)
+// Wrap query() so every connection is consistently WIB
 const originalQuery = pool.query.bind(pool);
 pool.query = async function(sql, params) {
     const connection = await originalGetConnection();
     try {
-        let modifiedSql = sql;
-        const upperSql = sql.toUpperCase().trim();
-        const isWriteQuery = upperSql.startsWith('INSERT') || upperSql.startsWith('UPDATE') || upperSql.startsWith('REPLACE');
-        
-        // Only set timezone for write queries (INSERT/UPDATE)
-        if (isWriteQuery) {
-            await connection.query("SET time_zone = '+07:00'");
-            
-            // For INSERT/UPDATE queries with CURRENT_TIMESTAMP, replace with explicit WIB conversion
-            if (sql.includes('CURRENT_TIMESTAMP')) {
-                modifiedSql = sql.replace(/CURRENT_TIMESTAMP/g, "CONVERT_TZ(NOW(), '+00:00', '+07:00')");
-            }
-        }
-        
-        const result = await connection.query(modifiedSql, params);
+        await ensureWibTimezone(connection);
+        const result = await connection.query(sql, params);
         return result;
     } finally {
         connection.release();
@@ -99,8 +87,7 @@ pool.query = async function(sql, params) {
 pool.getConnection()
     .then(async (connection) => {
         console.log('✅ Database connected');
-        // Note: Timezone is set only for INSERT/UPDATE queries (not SELECT)
-        // Data is stored in WIB, so no conversion needed when reading
+        // Note: We set session time_zone to WIB (+07:00) per pooled connection in wrappers.
         try {
             const [rows] = await connection.query("SELECT NOW() as db_time, @@session.time_zone as session_tz");
             if (rows && rows[0]) {
