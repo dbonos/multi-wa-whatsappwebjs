@@ -222,60 +222,105 @@ class StatisticsService {
             console.log(`📊 [STATISTICS] Processing ${incomingMessages.length} incoming messages for date ${dateStr}`);
             
             // Group messages by period and customer (from_number)
-            // Structure: periodIndex -> { new: Set<from_number>, previous: Set<from_number>, replies: Map<from_number, responseTime>, firstMessage: Map<from_number, timestamp> }
+            // Structure: periodIndex -> { new: Set<from_number>, previous: Set<from_number>, replies: Map<from_number, responseTime>, firstMessage: Map<from_number, {timestamp, created_at}> }
             const periodCustomers = {};
             
-            // Track first message timestamp per customer per session per day (NOT per period)
-            // Key: from_number -> first timestamp in this session on this day
-            const customerFirstMessageInSession = new Map();
+            // Track first message per customer per period (NOT per session)
+            // Key: periodIndex_fromNumber -> { timestamp, created_at }
+            const customerFirstMessagePerPeriod = new Map();
             
             // Track customers who have been replied to AT ALL during the entire day (across all periods)
-            // Key: from_number -> { replied: boolean, replyTimestamp: number, firstMessageTimestamp: number }
-            const customersRepliedDuringDay = new Map();
+            // Key: from_number -> boolean (true if replied at any point during the day)
+            const customersRepliedDuringDay = new Set();
             
-            // First pass: Find first message per customer in this session on this day
+            // First pass: Group messages by period and find first message per customer per period
             for (const incomingMsg of incomingMessages) {
-                if (!customerFirstMessageInSession.has(incomingMsg.from_number)) {
-                    customerFirstMessageInSession.set(incomingMsg.from_number, incomingMsg.timestamp);
+                const periodIndex = this.getPeriodIndex(incomingMsg.timestamp, periodsArray);
+                if (periodIndex === null) {
+                    console.warn(`⚠️ [STATISTICS] Message ${incomingMsg.message_id} at timestamp ${incomingMsg.timestamp} does not fall into any period`);
+                    continue;
+                }
+
+                if (!periodCustomers[periodIndex]) {
+                    periodCustomers[periodIndex] = {
+                        newCustomers: new Set(),
+                        previousCustomers: new Set(),
+                        customerReplies: new Map() // from_number -> responseTimeSeconds (from first message in period to first reply)
+                    };
+                }
+
+                // Track first message per customer per period
+                const periodCustomerKey = `${periodIndex}_${incomingMsg.from_number}`;
+                if (!customerFirstMessagePerPeriod.has(periodCustomerKey)) {
+                    customerFirstMessagePerPeriod.set(periodCustomerKey, {
+                        timestamp: incomingMsg.timestamp,
+                        created_at: incomingMsg.created_at
+                    });
                 }
             }
             
             // Second pass: Check for replies for each unique customer during the entire day
-            // Reply = to_number yang sama dengan from_number dan created_at > created_at message pertama customer di hari itu
-            for (const [fromNumber, firstMessageTimestamp] of customerFirstMessageInSession.entries()) {
+            // Reply = to_number yang sama dengan from_number dan created_at > created_at message pertama customer di periode tersebut
+            // Unreplied = tidak ada to_number yang sama dengan from_number sepanjang hari
+            const allUniqueCustomers = new Set();
+            for (const incomingMsg of incomingMessages) {
+                allUniqueCustomers.add(incomingMsg.from_number);
+            }
+            
+            for (const fromNumber of allUniqueCustomers) {
                 // Skip if fromNumber is invalid
                 if (!fromNumber || fromNumber === 'undefined' || fromNumber === 'null') {
                     console.warn(`⚠️ [STATISTICS] Skipping invalid fromNumber: ${fromNumber}`);
                     continue;
                 }
                 
-                // Find the first incoming message object to get its created_at
-                const firstIncomingMsg = incomingMessages.find(msg => 
-                    msg.from_number === fromNumber && msg.timestamp === firstMessageTimestamp
+                // Find first reply: outgoing message where to_number = from_number (any time during the day)
+                // Search across ALL sessions, not just the same session
+                const [replies] = await pool.execute(
+                    `SELECT message_id, timestamp, created_at, fromAI, to_number, contact_id, session_id
+                    FROM messages 
+                    WHERE direction = 'outgoing'
+                    AND to_number = ?
+                    AND DATE(created_at) = DATE(?)
+                    ORDER BY created_at ASC
+                    LIMIT 1`,
+                    [
+                        fromNumber,
+                        dateStr + ' 00:00:00' // Use date string for comparison
+                    ]
                 );
                 
-                if (!firstIncomingMsg) {
-                    console.warn(`⚠️ [STATISTICS] First incoming message not found for ${fromNumber}`);
+                if (replies.length > 0) {
+                    customersRepliedDuringDay.add(fromNumber);
+                }
+            }
+            
+            // Third pass: Calculate response time per period for each customer
+            for (const [periodCustomerKey, firstMessageInfo] of customerFirstMessagePerPeriod.entries()) {
+                const [periodIndex, fromNumber] = periodCustomerKey.split('_');
+                
+                // Skip if fromNumber is invalid
+                if (!fromNumber || fromNumber === 'undefined' || fromNumber === 'null') {
                     continue;
                 }
                 
                 // Get created_at, fallback to timestamp if not available
-                const firstIncomingCreatedAt = firstIncomingMsg.created_at 
-                    ? new Date(firstIncomingMsg.created_at).getTime() / 1000
-                    : firstMessageTimestamp;
+                const firstIncomingCreatedAt = firstMessageInfo.created_at 
+                    ? new Date(firstMessageInfo.created_at).getTime() / 1000
+                    : firstMessageInfo.timestamp;
                 
                 // Ensure we have a valid created_at datetime for SQL query
-                const firstIncomingCreatedAtDatetime = firstIncomingMsg.created_at 
-                    ? firstIncomingMsg.created_at
-                    : new Date(firstMessageTimestamp * 1000).toISOString().slice(0, 19).replace('T', ' ');
+                const firstIncomingCreatedAtDatetime = firstMessageInfo.created_at 
+                    ? firstMessageInfo.created_at
+                    : new Date(firstMessageInfo.timestamp * 1000).toISOString().slice(0, 19).replace('T', ' ');
                 
                 // Validate datetime string
                 if (!firstIncomingCreatedAtDatetime || firstIncomingCreatedAtDatetime === 'Invalid Date') {
-                    console.warn(`⚠️ [STATISTICS] Invalid created_at datetime for ${fromNumber}, using timestamp fallback`);
+                    console.warn(`⚠️ [STATISTICS] Invalid created_at datetime for ${fromNumber} in period ${periodIndex}`);
                     continue;
                 }
                 
-                // Find first reply: outgoing message where to_number = from_number and created_at > first message created_at
+                // Find first reply: outgoing message where to_number = from_number and created_at > first message created_at in this period
                 // Search across ALL sessions, not just the same session
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, created_at, fromAI, to_number, contact_id, session_id
@@ -295,55 +340,29 @@ class StatisticsService {
                 
                 if (replies.length > 0) {
                     const reply = replies[0];
-                    // Response time = selisih created_at reply pertama dengan created_at message pertama customer di hari itu
+                    // Response time = selisih created_at reply pertama dengan created_at message pertama customer di periode tersebut
                     const replyCreatedAt = reply.created_at 
                         ? new Date(reply.created_at).getTime() / 1000
                         : reply.timestamp;
                     
+                    // Response time in seconds
                     const responseTimeSeconds = Math.floor(replyCreatedAt - firstIncomingCreatedAt);
                     
                     if (responseTimeSeconds > 0) {
-                        customersRepliedDuringDay.set(fromNumber, {
-                            replied: true,
-                            replyTimestamp: reply.timestamp,
-                            firstMessageTimestamp: firstMessageTimestamp,
-                            firstMessageCreatedAt: firstIncomingCreatedAt,
-                            responseTimeSeconds: responseTimeSeconds
-                        });
-                    } else {
-                        customersRepliedDuringDay.set(fromNumber, {
-                            replied: false,
-                            replyTimestamp: null,
-                            firstMessageTimestamp: firstMessageTimestamp,
-                            firstMessageCreatedAt: firstIncomingCreatedAt,
-                            responseTimeSeconds: null
-                        });
+                        // Store the response time for this customer in this period
+                        const existingTime = periodCustomers[periodIndex].customerReplies.get(fromNumber);
+                        if (!existingTime || responseTimeSeconds < existingTime) {
+                            periodCustomers[periodIndex].customerReplies.set(fromNumber, responseTimeSeconds);
+                        }
                     }
-                } else {
-                    customersRepliedDuringDay.set(fromNumber, {
-                        replied: false,
-                        replyTimestamp: null,
-                        firstMessageTimestamp: firstMessageTimestamp,
-                        firstMessageCreatedAt: firstIncomingCreatedAt,
-                        responseTimeSeconds: null
-                    });
                 }
             }
             
-            // Third pass: Process each incoming message and assign to periods
+            // Fourth pass: Assign customers to periods and categorize as new/previous
             for (const incomingMsg of incomingMessages) {
                 const periodIndex = this.getPeriodIndex(incomingMsg.timestamp, periodsArray);
                 if (periodIndex === null) {
-                    console.warn(`⚠️ [STATISTICS] Message ${incomingMsg.message_id} at timestamp ${incomingMsg.timestamp} does not fall into any period`);
                     continue;
-                }
-
-                if (!periodCustomers[periodIndex]) {
-                    periodCustomers[periodIndex] = {
-                        newCustomers: new Set(),
-                        previousCustomers: new Set(),
-                        customerReplies: new Map() // from_number -> responseTimeSeconds (from first message in session to first reply)
-                    };
                 }
 
                 // Check if new customer - use from_number instead of contact_id
@@ -352,17 +371,6 @@ class StatisticsService {
                 
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
                 customerSet.add(incomingMsg.from_number);
-
-                // Store response time for this customer if they have been replied to
-                const customerReplyInfo = customersRepliedDuringDay.get(incomingMsg.from_number);
-                if (customerReplyInfo && customerReplyInfo.replied && customerReplyInfo.responseTimeSeconds > 0) {
-                    // Store the response time for this customer in this period
-                    // Response time is calculated from first message in session (not per period)
-                    const existingTime = periodCustomers[periodIndex].customerReplies.get(incomingMsg.from_number);
-                    if (!existingTime || customerReplyInfo.responseTimeSeconds < existingTime) {
-                        periodCustomers[periodIndex].customerReplies.set(incomingMsg.from_number, customerReplyInfo.responseTimeSeconds);
-                    }
-                }
             }
             
             // Now calculate statistics per period based on unique customers
