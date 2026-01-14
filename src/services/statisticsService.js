@@ -171,11 +171,12 @@ class StatisticsService {
 
             // Handle period that spans midnight (e.g., 21:00 - 00:00)
             if (endMinutes < startMinutes) {
-                if (totalMinutes >= startMinutes || totalMinutes < endMinutes) {
+                if (totalMinutes >= startMinutes || totalMinutes <= endMinutes) {
                     return i;
                 }
             } else {
-                if (totalMinutes >= startMinutes && totalMinutes < endMinutes) {
+                // Use <= for end time because end time like "07:59" means "until 07:59:59"
+                if (totalMinutes >= startMinutes && totalMinutes <= endMinutes) {
                     return i;
                 }
             }
