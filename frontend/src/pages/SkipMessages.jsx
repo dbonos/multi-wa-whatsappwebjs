@@ -357,23 +357,27 @@ export default function SkipMessages() {
                     {filteredSkipList.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg"
                       >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1 min-w-0">
                             {item.type === 'group' ? (
                               <Users className="w-4 h-4 text-gray-500" />
                             ) : (
                               <User className="w-4 h-4 text-gray-500" />
                             )}
-                            <span className="font-medium">{item.name || item.group_id || item.phone_number}</span>
+                            <span className="font-medium truncate min-w-0">
+                              {item.name || item.group_id || item.phone_number}
+                            </span>
                             <Badge variant={item.is_active ? 'destructive' : 'secondary'}>
                               {item.is_active ? 'Active' : 'Inactive'}
                             </Badge>
                             <Badge variant="outline">{item.type}</Badge>
                           </div>
                           {item.description && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">{item.description}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 break-words">
+                              {item.description}
+                            </p>
                           )}
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                             Created: {new Date(item.created_at).toLocaleString('id-ID', {
@@ -388,7 +392,7 @@ export default function SkipMessages() {
                             })}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
                           <button
                             onClick={() => handleToggleSkipRule(item)}
                             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
@@ -436,9 +440,9 @@ export default function SkipMessages() {
                     {filteredGroups.map((group) => (
                       <div
                         key={group.group_id}
-                        className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
-                        <div className="flex-1 flex items-center gap-3">
+                        <div className="flex-1 min-w-0 flex items-center gap-3">
                           {/* Profile Picture */}
                           {group.profile_picture_url ? (
                             <img
@@ -455,9 +459,9 @@ export default function SkipMessages() {
                             <Users className="w-5 h-5 text-gray-500" />
                           </div>
                           
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium">{group.name || group.pushname || 'Group'}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 min-w-0">
+                              <span className="font-medium truncate min-w-0">{group.name || group.pushname || 'Group'}</span>
                             </div>
                             <p className="text-xs text-gray-400 dark:text-gray-500">
                               {group.message_count || 0} messages • Last: {group.last_message_time ? new Date(group.last_message_time * 1000).toLocaleString('id-ID', {
@@ -475,7 +479,7 @@ export default function SkipMessages() {
                         </div>
                         <button
                           onClick={() => handleToggleGroup(group)}
-                          className="px-4 py-2 rounded-lg transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                          className="px-4 py-2 rounded-lg transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex-shrink-0 w-full sm:w-auto"
                         >
                           Skip Messages
                         </button>
@@ -558,25 +562,25 @@ export default function SkipMessages() {
                       return (
                         <div
                           key={contact.id}
-                          className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1 min-w-0">
                               <User className="w-4 h-4 text-gray-500" />
-                              <span className="font-medium">
+                              <span className="font-medium truncate min-w-0">
                                 {contact.name || contact.pushname || contact.phone_number || 'Unknown'}
                               </span>
                               {isSkipped && (
                                 <Badge variant="destructive">Skipped</Badge>
                               )}
                             </div>
-                            <p className="text-xs text-gray-400 dark:text-gray-500">
+                            <p className="text-xs text-gray-400 dark:text-gray-500 break-words">
                               {contact.phone_number || contact.contact_id}
                             </p>
                           </div>
                           <button
                             onClick={() => handleToggleContact(contact)}
-                            className={`px-4 py-2 rounded-lg transition-colors ${
+                            className={`px-4 py-2 rounded-lg transition-colors flex-shrink-0 w-full sm:w-auto ${
                               isSkipped
                                 ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
                                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
