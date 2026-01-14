@@ -2280,6 +2280,7 @@ app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
 app.get('/api/statistics', authenticate, async (req, res) => {
     try {
         const { sessionId, date } = req.query;
+        console.log(`📊 [API STATISTICS] Request received: sessionId=${sessionId}, date=${date}`);
         
         if (!sessionId) {
             return res.status(400).json({ error: 'sessionId is required' });
@@ -2314,6 +2315,8 @@ app.get('/api/statistics', authenticate, async (req, res) => {
         // Calculate statistics
         const statistics = await statisticsService.getAllPeriodsStatistics(sessionId, targetDate, periods);
 
+        console.log(`📊 [API STATISTICS] Response: ${statistics.length} periods, T1 new_customer=${statistics[0]?.new_customer?.count || 0}`);
+        
         res.json({ 
             success: true, 
             statistics,
