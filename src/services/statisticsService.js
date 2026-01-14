@@ -357,6 +357,8 @@ class StatisticsService {
             
             // Fourth pass: Assign customers to periods and categorize as new/previous
             // Use created_at for period determination
+            // New customer = belum pernah ada di periode itu, periode sebelumnya di hari itu dan hari sebelumnya
+            // Previous customer = sudah pernah ada di periode itu, periode sebelumnya di hari itu dan hari sebelumnya
             for (const incomingMsg of incomingMessages) {
                 // Skip if created_at is missing
                 if (!incomingMsg.created_at) {
@@ -368,9 +370,15 @@ class StatisticsService {
                     continue;
                 }
 
-                // Check if new customer - use from_number instead of contact_id
-                // New customer = belum pernah WA (tidak ada di database sebelumnya di semua session)
-                const isNew = await this.isNewCustomer(sessionId, incomingMsg.from_number, dateStr);
+                // Check if new customer for this period
+                // New customer = belum pernah ada di periode sebelumnya (hari itu) dan hari sebelumnya
+                const isNew = await this.isNewCustomerForPeriod(
+                    sessionId, 
+                    incomingMsg.from_number, 
+                    dateStr, 
+                    periodIndex, 
+                    periodsArray
+                );
                 
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
                 customerSet.add(incomingMsg.from_number);
