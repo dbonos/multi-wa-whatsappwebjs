@@ -129,8 +129,12 @@ class StatisticsService {
 
     /**
      * Check if customer is new for a specific period
-     * New customer = belum pernah ada di periode sebelumnya di hari itu dan hari sebelumnya
-     * Previous customer = sudah pernah ada di periode sebelumnya di hari itu atau hari sebelumnya
+     * New customer = belum pernah ada di periode sebelumnya di hari itu
+     * Previous customer = sudah pernah ada di periode sebelumnya di hari itu (TIDAK perlu cek hari sebelumnya)
+     * 
+     * Catatan: Jika customer muncul di periode sebelumnya di hari yang sama, langsung previous customer,
+     *           meskipun belum pernah muncul di hari-hari sebelumnya.
+     * 
      * @param {string} sessionId - Session ID
      * @param {string} fromNumber - Customer phone number
      * @param {string} dateStr - Date string (YYYY-MM-DD)
@@ -145,42 +149,25 @@ class StatisticsService {
                 return false;
             }
             
-            // Check if customer has appeared in:
-            // 1. Previous periods in the same day (periods with index < currentPeriodIndex)
-            // 2. Any period in previous days (before dateStr)
-            
-            // Check previous periods in the same day using already-fetched messages
+            // PRIORITAS: Cek apakah customer muncul di periode sebelumnya di hari yang sama
+            // Jika ya, langsung previous customer (TIDAK perlu cek hari sebelumnya)
             if (currentPeriodIndex > 0 && allIncomingMessagesToday) {
                 for (const msg of allIncomingMessagesToday) {
                     if (msg.from_number === fromNumber && msg.created_at) {
                         const msgPeriodIndex = this.getPeriodIndex(msg.created_at, periodsArray);
                         if (msgPeriodIndex !== null && msgPeriodIndex < currentPeriodIndex) {
-                            console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} found in period ${msgPeriodIndex} (current: ${currentPeriodIndex})`);
-                            return false; // Not new, it's previous
+                            console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} found in period ${msgPeriodIndex} (current: ${currentPeriodIndex}) - PREVIOUS`);
+                            return false; // Not new, it's previous (muncul di periode sebelumnya di hari yang sama)
                         }
                     }
                 }
             }
             
-            // Check previous days (any period)
-            const dateStartDatetime = dateStr + ' 00:00:00';
-            const [messagesInPreviousDays] = await pool.execute(
-                `SELECT id FROM messages 
-                WHERE session_id = ?
-                AND from_number = ? 
-                AND direction = 'incoming'
-                AND created_at < ?
-                LIMIT 1`,
-                [sessionId, fromNumber, dateStartDatetime]
-            );
-            
-            if (messagesInPreviousDays.length > 0) {
-                console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} found in previous days`);
-                return false; // Not new, it's previous
-            }
-            
-            // Customer has never appeared before = new customer
-            console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} is NEW for period ${currentPeriodIndex}`);
+            // Jika tidak muncul di periode sebelumnya di hari yang sama, maka new customer
+            // TIDAK perlu cek hari sebelumnya karena:
+            // - Jika muncul di periode sebelumnya di hari yang sama = previous (sudah dicek di atas)
+            // - Jika tidak muncul di periode sebelumnya di hari yang sama = new (meskipun pernah muncul di hari sebelumnya)
+            console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} is NEW for period ${currentPeriodIndex} (no previous period appearance today)`);
             return true;
         } catch (error) {
             console.error('Error checking new customer for period:', error);
