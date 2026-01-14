@@ -10,15 +10,17 @@ echo "🚀 Starting deployment..."
 echo "📥 Pulling latest code from GitHub..."
 git pull origin main
 
-# Run database migration for statistics tables
+# Run database migrations (best-effort)
 echo "🗄️  Running database migration..."
-if [ -f "database/migrations/create_statistics_tables.sql" ]; then
-    mysql -u root -p${MYSQL_PASSWORD:-} wa_manager < database/migrations/create_statistics_tables.sql 2>/dev/null || {
-        echo "⚠️  Migration might have failed or tables already exist. Continuing..."
-    }
-else
-    echo "⚠️  Migration file not found. Skipping..."
-fi
+for MIG in database/migrations/create_statistics_tables.sql database/migrations/convert_timestamp_to_datetime_wib.sql; do
+  if [ -f \"$MIG\" ]; then
+      mysql -u root -p${MYSQL_PASSWORD:-} wa_manager < \"$MIG\" 2>/dev/null || {
+          echo \"⚠️  Migration $MIG might have failed or already applied. Continuing...\"
+      }
+  else
+      echo \"⚠️  Migration file not found: $MIG (skipping)\"
+  fi
+done
 
 # Install/update backend dependencies
 echo "📦 Installing backend dependencies..."

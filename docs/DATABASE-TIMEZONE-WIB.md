@@ -2,40 +2,27 @@
 
 ## Overview
 
-All timestamp columns ending with `_at` in the database are configured to use **WIB (Waktu Indonesia Barat, UTC+7)** timezone. This ensures consistent time representation across the entire application.
+All date/time values in the database should represent **WIB (Waktu Indonesia Barat, UTC+7)**.
+
+To prevent UTC/WIB shifting bugs (especially in statistics), we store wall-clock times as **DATETIME** (not TIMESTAMP) for all `*_at` columns.
 
 ## Implementation
 
 ### Database Connection Configuration
 
-The database connection pool (`src/config/database.js`) automatically sets the MySQL session timezone to `+07:00` (WIB) before every query execution. This ensures that:
+The database connection pool (`src/config/database.js`) sets the MySQL session timezone to `+07:00` (WIB) per pooled connection. This ensures that:
 
-- `CURRENT_TIMESTAMP` uses WIB timezone
-- All `DEFAULT CURRENT_TIMESTAMP` columns use WIB
-- All `ON UPDATE CURRENT_TIMESTAMP` columns use WIB
-- All manual timestamp inserts/updates use WIB
+- `NOW()` / `CURRENT_TIMESTAMP` used by INSERT/UPDATE are WIB
+- New rows written with defaults are WIB
 
-### Wrapper Functions
+### Why DATETIME (not TIMESTAMP)
 
-Both `pool.execute()` and `pool.query()` are wrapped to ensure timezone is set before every query:
-
-```javascript
-pool.execute = async function(sql, params) {
-    const connection = await originalGetConnection();
-    try {
-        // CRITICAL: Set timezone BEFORE executing query
-        await connection.query("SET time_zone = '+07:00'");
-        const result = await connection.execute(sql, params);
-        return result;
-    } finally {
-        connection.release();
-    }
-};
-```
+- **TIMESTAMP**: MySQL converts values based on `@@session.time_zone` on read/write → can shift 7 hours if misconfigured.
+- **DATETIME**: Stored and returned as-is → perfect for “DB sudah WIB”.
 
 ## Affected Columns
 
-All columns ending with `_at` across all tables:
+All columns ending with `_at` across all tables (examples below).
 
 ### `messages` table
 - `created_at` - Message creation time
@@ -74,7 +61,6 @@ All columns ending with `_at` across all tables:
 
 ### `message_reactions` table
 - `created_at` - Reaction creation time
-- `updated_at` - Last update time (auto-updated)
 
 ### `message_replies` table
 - `created_at` - Reply creation time
@@ -129,37 +115,10 @@ The `created_at` should match `NOW()` (both in WIB), and both should be approxim
 
 ## Statistics Calculation Timezone Handling
 
-### Important: Timestamp Storage
-
-All message timestamps in the `messages` table are stored as **Unix timestamps in WIB timezone** (already converted from UTC). This means:
-
-- **Incoming messages**: Timestamp is converted from UTC to WIB using `convertUTCToWIBTimestamp()` before saving
-- **Outgoing messages**: Timestamp is converted from UTC to WIB using `convertUTCToWIBTimestamp()` before saving
-- **Database queries**: Should NOT add 25200 seconds (7 hours) because timestamp is already in WIB
-
-### Statistics Service (`src/services/statisticsService.js`)
-
-The statistics calculation service correctly handles WIB timestamps:
-
-1. **Date Range Queries**: Uses WIB timestamp range directly without adding 25200 seconds
-   ```javascript
-   // Correct: Convert date to WIB timestamp range
-   const dateObj = new Date(dateStr + 'T00:00:00+07:00');
-   const dateStartWIB = Math.floor(dateObj.getTime() / 1000);
-   ```
-
-2. **Period Assignment**: Uses `timestampToWIB()` to get correct hours/minutes for period matching
-   ```javascript
-   // Correct: Convert to WIB Date object
-   const wibDate = timestampToWIB(timestamp * 1000);
-   const hours = wibDate.getHours();
-   ```
-
-3. **New Customer Check**: Uses timestamp comparison directly without double conversion
-   ```javascript
-   // Correct: Compare timestamps directly (both already in WIB)
-   AND timestamp < ?
-   ```
+Statistics uses `messages.created_at` (WIB wall-clock DATETIME) for:
+- period assignment
+- same-day boundaries (`DATE(created_at)=?`)
+- reply window rules (same day)
 
 ### Common Mistakes to Avoid
 
@@ -191,36 +150,15 @@ const hours = wibDate.getHours(); // Uses WIB timezone
 
 ## Messages Table Timestamp Fix
 
-### Migration Script
+### Migration Script (recommended)
 
-A migration script (`database/migrations/fix_messages_timestamps.sql`) was created to fix existing timestamp data:
-
-1. **Records ID 1-1101**: Add 7 hours to `webhook_sent_at`, `created_at`, and `updated_at`
-2. **Records ID >= 1102**:
-   - If `webhook_sent_at` is not null: Sync `created_at` and `updated_at` hours/minutes with `webhook_sent_at` (seconds preserved)
-   - If `webhook_sent_at` is null: Sync `created_at` and `updated_at` to use the later time (hours/minutes only)
-
-### Code Fixes
-
-All message INSERT queries now explicitly set `created_at` and `updated_at` using `CONVERT_TZ(NOW(), '+00:00', '+07:00')`:
-
-- **Incoming messages** (`messageHandler.js`): Explicitly set both timestamps
-- **Outgoing messages from mobile** (`messageHandler.js`): Explicitly set both timestamps  
-- **Outgoing messages from API** (`server.js`): Explicitly set both timestamps
-
-This ensures that:
-- `created_at` is always in WIB timezone (no 7-hour delay)
-- `updated_at` matches `created_at` for new messages
-- `ON DUPLICATE KEY UPDATE` also uses WIB timezone
+Use `database/migrations/convert_timestamp_to_datetime_wib.sql` to convert all TIMESTAMP `*_at` columns to DATETIME while preserving WIB wall-clock display.
 
 ## Notes
 
-- **Existing Data**: Migration script fixes old records (see above)
-- **New Data**: All new records will use WIB timezone with explicit `CONVERT_TZ` calls
-- **Connection Pooling**: Timezone is set before every query to handle connection reuse
-- **Performance**: Setting timezone adds minimal overhead (~1ms per query)
-- **Statistics**: All statistics calculations assume timestamps are already in WIB (no double conversion)
-- **Messages**: All message INSERT queries explicitly set `created_at` and `updated_at` to ensure WIB timezone
+- **Server OS timezone** should be `Asia/Jakarta` (WIB)
+- **MySQL session timezone** for the app is set to `+07:00` so `NOW()` is WIB
+- **DATETIME columns** are not shifted by MySQL, which prevents UTC/WIB “geser 7 jam” bugs
 
 ## Troubleshooting
 

@@ -998,11 +998,11 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         }
 
         // Save message to database FIRST (before attachment to satisfy foreign key constraint)
-        // CRITICAL: Explicitly set created_at and updated_at to ensure WIB timezone
+        // We store created_at/updated_at as WIB wall-clock time (DATETIME after migration).
         const [result] = await pool.execute(
             `INSERT INTO messages 
              (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, attachment_path, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, 'outgoing', 1, ?, ?, ?, 'sent', ?, ?, CONVERT_TZ(NOW(), '+00:00', '+07:00'), CONVERT_TZ(NOW(), '+00:00', '+07:00'))`,
+             VALUES (?, ?, ?, ?, ?, 'outgoing', 1, ?, ?, ?, 'sent', ?, ?, NOW(), NOW())`,
             [
                 sessionId,
                 sentMessage.id._serialized,
@@ -2413,7 +2413,7 @@ app.put('/api/statistics/settings', authenticate, requireAdmin, async (req, res)
             // Update existing
             await pool.execute(
                 `UPDATE statistics_settings 
-                SET is_enabled = ?, recipient_phone = ?, send_time = ?, periods = ?, updated_at = CONVERT_TZ(NOW(), '+00:00', '+07:00')
+                SET is_enabled = ?, recipient_phone = ?, send_time = ?, periods = ?, updated_at = NOW()
                 WHERE session_id = ?`,
                 [is_enabled || false, recipient_phone || '', send_time || '08:00:00', periodsJson, sessionId]
             );

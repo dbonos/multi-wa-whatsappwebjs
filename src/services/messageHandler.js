@@ -348,13 +348,13 @@ class MessageHandler {
 
             // Save message
             // Outgoing messages from mobile device are fromAI = 0 (not from API)
-            // CRITICAL: Explicitly set created_at and updated_at to ensure WIB timezone
+            // We store created_at/updated_at as WIB wall-clock time (DATETIME after migration).
             let [result] = await pool.execute(
                 `INSERT INTO messages 
                 (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'outgoing', 0, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '+07:00'), CONVERT_TZ(NOW(), '+00:00', '+07:00'))
+                VALUES (?, ?, ?, ?, ?, 'outgoing', 0, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE
-                updated_at = CONVERT_TZ(NOW(), '+00:00', '+07:00')`,
+                updated_at = NOW()`,
                 [
                     sessionId,
                     message.id._serialized,
@@ -531,13 +531,13 @@ class MessageHandler {
             // Save message
             // Use INSERT IGNORE or ON DUPLICATE KEY UPDATE to handle duplicate message_id
             // Incoming messages are always fromAI = 0 (not from API)
-            // CRITICAL: Explicitly set created_at and updated_at to ensure WIB timezone
+            // We store created_at/updated_at as WIB wall-clock time (DATETIME after migration).
             let [result] = await pool.execute(
                 `INSERT INTO messages 
                 (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'incoming', 0, ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '+07:00'), CONVERT_TZ(NOW(), '+00:00', '+07:00'))
+                VALUES (?, ?, ?, ?, ?, 'incoming', 0, ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE
-                updated_at = CONVERT_TZ(NOW(), '+00:00', '+07:00')`,
+                updated_at = NOW()`,
                 [
                     sessionId,
                     message.id._serialized,

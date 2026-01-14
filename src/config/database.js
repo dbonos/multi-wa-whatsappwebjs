@@ -12,9 +12,9 @@ const pool = mysql.createPool({
     queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    // NOTE: Do NOT set timezone here - data is already stored in WIB
-    // Setting timezone: '+07:00' causes double conversion when reading
-    // The SET time_zone wrapper below handles INSERT/UPDATE operations
+    // NOTE:
+    // We set MySQL session time_zone in the wrappers below (per pooled connection).
+    // This keeps NOW()/CURRENT_TIMESTAMP consistent (WIB) and avoids mixed behavior across pooled connections.
     typeCast: function (field, next) {
         if (field.type === 'TIMESTAMP' || field.type === 'DATETIME' || field.type === 'DATE') {
             return field.string();
@@ -32,24 +32,23 @@ pool.on('connection', function (connection) {
 // Get original getConnection for use in wrappers
 const originalGetConnection = pool.getConnection.bind(pool);
 
-// Note: DO NOT set timezone in getConnection wrapper
-// Timezone is only needed for INSERT/UPDATE operations
-// Setting it globally causes double offset when reading DATETIME columns
+// Note:
+// We intentionally set session time_zone per pooled connection inside execute/query wrappers.
 
 /**
  * Ensure every pooled connection uses a fixed time_zone consistently.
  *
  * IMPORTANT:
- * - `messages.created_at` is a TIMESTAMP column, so MySQL converts values based on the connection/session time_zone.
- * - For "mode B" (treat DB values as already WIB and DO NOT shift), we must read TIMESTAMP as-is (no +07 conversion).
- *   The safest approach is to force session time_zone to UTC (+00:00) so TIMESTAMP values are returned without shifting.
+ * - We store times in DB as WIB "wall-clock" values (business rule).
+ * - After migrating timestamp columns to DATETIME, reads are no longer timezone-shifted by MySQL.
+ * - We still set session time_zone to WIB (+07:00) so NOW()/CURRENT_TIMESTAMP used by INSERT/UPDATE are WIB.
  *
  * Also:
  * - We set it ONCE per pooled connection (cached via a flag) for both reads and writes to avoid mixed behavior.
  */
 async function ensureFixedTimezone(connection) {
     if (connection.__fixedTimeZoneSet) return;
-    await connection.query("SET time_zone = '+00:00'");
+    await connection.query("SET time_zone = '+07:00'");
     connection.__fixedTimeZoneSet = true;
 }
 
