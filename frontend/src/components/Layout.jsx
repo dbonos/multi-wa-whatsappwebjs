@@ -44,13 +44,15 @@ export default function Layout({ children }) {
   ].filter(item => isAdmin || !item.adminOnly);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-b from-emerald-50 via-white to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-900">
       {/* Mobile Header */}
-      <div className="lg:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-whatsapp">WA Manager</h1>
+      <div className="lg:hidden sticky top-0 z-50 bg-white/80 dark:bg-gray-900/70 backdrop-blur border-b border-gray-200/70 dark:border-gray-700/70 px-4 py-3 flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+          <span className="text-whatsapp">WA</span> Manager
+        </h1>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 rounded-lg hover:bg-gray-100"
+          className="p-2 rounded-xl hover:bg-gray-100/80 dark:hover:bg-gray-800/70 transition-colors"
         >
           {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -61,14 +63,16 @@ export default function Layout({ children }) {
         <aside
           className={`${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
+          } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white/85 dark:bg-gray-900/80 backdrop-blur border-r border-gray-200/70 dark:border-gray-700/70 transition-transform duration-300 ease-in-out`}
         >
           <div className="h-full flex flex-col">
             {/* Logo */}
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h1 className="text-2xl font-bold text-whatsapp flex items-center gap-2">
-                <MessageSquare className="w-7 h-7" />
-                WA Manager
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-2xl bg-whatsapp text-white shadow-sm">
+                  <MessageSquare className="w-5 h-5" />
+                </span>
+                <span className="text-gray-900 dark:text-gray-100">WA Manager</span>
               </h1>
             </div>
 
@@ -82,10 +86,10 @@ export default function Layout({ children }) {
                     key={item.path}
                     to={item.path}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
                       isActive
-                        ? 'bg-whatsapp text-white'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        ? 'bg-whatsapp text-white shadow-sm'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/70'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -156,7 +160,11 @@ export default function Layout({ children }) {
 
         {/* Main Content */}
         <main className="flex-1 lg:ml-0 min-w-0 w-full max-w-full overflow-x-hidden">
-          <div className="p-4 lg:p-8 w-full max-w-full overflow-x-hidden">{children}</div>
+          <div className="p-4 lg:p-8 w-full max-w-full overflow-x-hidden">
+            <div className="mx-auto w-full max-w-7xl">
+              {children}
+            </div>
+          </div>
         </main>
       </div>
     </div>
