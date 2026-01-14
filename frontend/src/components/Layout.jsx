@@ -44,7 +44,7 @@ export default function Layout({ children }) {
   ].filter(item => isAdmin || !item.adminOnly);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
       {/* Mobile Header */}
       <div className="lg:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
         <h1 className="text-xl font-bold text-whatsapp">WA Manager</h1>
@@ -56,7 +56,7 @@ export default function Layout({ children }) {
         </button>
       </div>
 
-      <div className="flex">
+      <div className="flex w-full max-w-full overflow-x-hidden">
         {/* Sidebar */}
         <aside
           className={`${
@@ -155,8 +155,8 @@ export default function Layout({ children }) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 lg:ml-0">
-          <div className="p-4 lg:p-8">{children}</div>
+        <main className="flex-1 lg:ml-0 min-w-0 w-full max-w-full overflow-x-hidden">
+          <div className="p-4 lg:p-8 w-full max-w-full overflow-x-hidden">{children}</div>
         </main>
       </div>
     </div>
