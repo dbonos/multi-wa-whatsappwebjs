@@ -12,9 +12,9 @@ const pool = mysql.createPool({
     queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    timezone: '+07:00', // WIB (UTC+7)
-    // Set timezone for every new connection automatically
-    // This ensures CURRENT_TIMESTAMP uses WIB timezone
+    // NOTE: Do NOT set timezone here - data is already stored in WIB
+    // Setting timezone: '+07:00' causes double conversion when reading
+    // The SET time_zone wrapper below handles INSERT/UPDATE operations
     typeCast: function (field, next) {
         if (field.type === 'TIMESTAMP' || field.type === 'DATETIME' || field.type === 'DATE') {
             return field.string();

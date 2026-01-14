@@ -86,43 +86,23 @@ class StatisticsService {
      * @returns {Promise<boolean>}
      */
     /**
-     * Check if customer is new for a specific period
-     * New customer = from_number yang baru, belum pernah ada di periode sebelumnya di hari itu dan hari sebelumnya
-     * Previous customer = sudah pernah ada di periode sebelumnya di hari itu atau hari sebelumnya
+     * Check if customer is new (never appeared before this date)
+     * New customer = from_number yang belum pernah ada di hari-hari SEBELUMNYA
+     * Previous customer = from_number yang sudah pernah ada di hari-hari SEBELUMNYA
+     * NOTE: Periode hanya untuk pengelompokan, BUKAN untuk menentukan new/previous
      * @param {string} sessionId - Session ID
      * @param {string} fromNumber - Customer phone number
      * @param {string} dateStr - Date string (YYYY-MM-DD)
-     * @param {number} currentPeriodIndex - Current period index (0, 1, 2, ...)
-     * @param {Array} periodsArray - All periods configuration
-     * @param {Array} allIncomingMessagesToday - All incoming messages for today (to check previous periods efficiently)
-     * @returns {Promise<boolean>} True if new customer for this period
+     * @returns {Promise<boolean>} True if new customer (never appeared before this date)
      */
-    async isNewCustomerForPeriod(sessionId, fromNumber, dateStr, currentPeriodIndex, periodsArray, allIncomingMessagesToday) {
+    async isNewCustomer(sessionId, fromNumber, dateStr) {
         try {
             if (!fromNumber) {
                 return false;
             }
             
-            // Check if customer has appeared in:
-            // 1. Previous periods in the same day (periods with index < currentPeriodIndex)
-            // 2. Any period in previous days (before dateStr)
-            
-            // Check previous periods in the same day using already-fetched messages
-            if (currentPeriodIndex > 0 && allIncomingMessagesToday) {
-                // Check messages in previous periods (index < currentPeriodIndex)
-                for (const msg of allIncomingMessagesToday) {
-                    if (msg.from_number === fromNumber && msg.created_at) {
-                        const msgPeriodIndex = this.getPeriodIndex(msg.created_at, periodsArray);
-                        if (msgPeriodIndex !== null && msgPeriodIndex < currentPeriodIndex) {
-                            // Customer appeared in a previous period of the same day = previous customer
-                            console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} found in period ${msgPeriodIndex} (current: ${currentPeriodIndex})`);
-                            return false;
-                        }
-                    }
-                }
-            }
-            
-            // Check previous days (any period)
+            // Check if customer has appeared in any previous days (before dateStr)
+            // Period doesn't matter - only check if they existed before today
             const dateStartDatetime = dateStr + ' 00:00:00';
             const [messagesInPreviousDays] = await pool.execute(
                 `SELECT id FROM messages 
@@ -136,15 +116,13 @@ class StatisticsService {
             
             if (messagesInPreviousDays.length > 0) {
                 // Customer appeared in previous days = previous customer
-                console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} found in previous days`);
                 return false;
             }
             
             // Customer has never appeared before = new customer
-            console.log(`📊 [NEW CUSTOMER CHECK] ${fromNumber} is NEW for period ${currentPeriodIndex}`);
             return true;
         } catch (error) {
-            console.error('Error checking new customer for period:', error);
+            console.error('Error checking new customer:', error);
             return false; // Default to false on error
         }
     }
@@ -417,15 +395,12 @@ class StatisticsService {
                 // Mark as processed
                 processedCustomersPerPeriod[periodIndex].add(incomingMsg.from_number);
 
-                // Check if new customer for this period
-                // Pass allIncomingMessagesToday to avoid re-querying database
-                const isNew = await this.isNewCustomerForPeriod(
+                // Check if new customer (never appeared before this date)
+                // Periode hanya untuk pengelompokan, bukan untuk menentukan new/previous
+                const isNew = await this.isNewCustomer(
                     sessionId, 
                     incomingMsg.from_number, 
-                    dateStr, 
-                    periodIndex, 
-                    periodsArray,
-                    incomingMessages // Pass all messages for today to check previous periods efficiently
+                    dateStr
                 );
                 
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
