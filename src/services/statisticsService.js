@@ -3,6 +3,25 @@ const { getWIBTimestamp, convertUTCToWIBTimestamp, timestampToWIB } = require('.
 
 class StatisticsService {
     /**
+     * Parse "YYYY-MM-DD HH:mm:ss" (stored as WIB wall-clock time) into epoch seconds deterministically.
+     * We do NOT rely on `new Date(str)` because parsing without timezone is environment-dependent.
+     * @param {string} datetimeStr
+     * @returns {number|null} epoch seconds
+     */
+    parseWibDateTimeToEpochSeconds(datetimeStr) {
+        if (!datetimeStr || typeof datetimeStr !== 'string') return null;
+        const m = datetimeStr.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+        if (!m) return null;
+        const year = Number(m[1]);
+        const month = Number(m[2]);
+        const day = Number(m[3]);
+        const hour = Number(m[4]);
+        const minute = Number(m[5]);
+        const second = Number(m[6]);
+        // WIB = UTC+7 => epoch(UTC) = wallclock(WIB) - 7 hours
+        return Math.floor(Date.UTC(year, month - 1, day, hour - 7, minute, second) / 1000);
+    }
+    /**
      * Default periods configuration
      */
     getDefaultPeriods() {
@@ -416,9 +435,12 @@ class StatisticsService {
                 if (replies.length > 0) {
                     const reply = replies[0];
                     // Response time = selisih created_at reply pertama dengan created_at message pertama customer di periode tersebut
-                    // Both in seconds (Unix timestamp)
-                    const firstIncomingCreatedAt = new Date(firstIncomingCreatedAtDatetime).getTime() / 1000;
-                    const replyCreatedAt = new Date(reply.created_at).getTime() / 1000;
+                    // Both in seconds (epoch), parsed deterministically as WIB wall-clock values
+                    const firstIncomingCreatedAt = this.parseWibDateTimeToEpochSeconds(firstIncomingCreatedAtDatetime);
+                    const replyCreatedAt = this.parseWibDateTimeToEpochSeconds(reply.created_at);
+                    if (!firstIncomingCreatedAt || !replyCreatedAt) {
+                        continue;
+                    }
                     
                     // Response time in seconds
                     const responseTimeSeconds = Math.floor(replyCreatedAt - firstIncomingCreatedAt);
