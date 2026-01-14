@@ -243,19 +243,31 @@ class StatisticsService {
             // Second pass: Check for replies for each unique customer during the entire day
             // Reply = to_number yang sama dengan from_number dan created_at > created_at message pertama customer di hari itu
             for (const [fromNumber, firstMessageTimestamp] of customerFirstMessageInSession.entries()) {
+                // Find the first incoming message object to get its created_at
+                const firstIncomingMsg = incomingMessages.find(msg => 
+                    msg.from_number === fromNumber && msg.timestamp === firstMessageTimestamp
+                );
+                
+                if (!firstIncomingMsg) continue;
+                
+                const firstIncomingCreatedAt = firstIncomingMsg.created_at 
+                    ? new Date(firstIncomingMsg.created_at).getTime() / 1000
+                    : firstMessageTimestamp;
+                
                 // Find first reply: outgoing message where to_number = from_number and created_at > first message created_at
+                // Search across ALL sessions, not just the same session
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, created_at, fromAI, to_number, contact_id, session_id
                     FROM messages 
                     WHERE direction = 'outgoing'
                     AND to_number = ?
-                    AND timestamp > ?
-                    AND timestamp <= ?
-                    ORDER BY timestamp ASC
+                    AND created_at > FROM_UNIXTIME(?)
+                    AND created_at <= FROM_UNIXTIME(?)
+                    ORDER BY created_at ASC
                     LIMIT 1`,
                     [
                         fromNumber,
-                        firstMessageTimestamp,
+                        firstIncomingCreatedAt,
                         dateEndWIB  // End of day (23:59:59)
                     ]
                 );
@@ -263,43 +275,27 @@ class StatisticsService {
                 if (replies.length > 0) {
                     const reply = replies[0];
                     // Response time = selisih created_at reply pertama dengan created_at message pertama customer di hari itu
-                    // Get created_at from database (not timestamp)
-                    const [firstIncomingMsg] = await pool.execute(
-                        `SELECT created_at FROM messages 
-                         WHERE session_id = ? 
-                         AND from_number = ? 
-                         AND direction = 'incoming'
-                         AND timestamp = ?
-                         ORDER BY created_at ASC
-                         LIMIT 1`,
-                        [sessionId, fromNumber, firstMessageTimestamp]
-                    );
+                    const replyCreatedAt = reply.created_at 
+                        ? new Date(reply.created_at).getTime() / 1000
+                        : reply.timestamp;
                     
-                    const [firstReplyMsg] = await pool.execute(
-                        `SELECT created_at FROM messages 
-                         WHERE message_id = ?`,
-                        [reply.message_id]
-                    );
+                    const responseTimeSeconds = Math.floor(replyCreatedAt - firstIncomingCreatedAt);
                     
-                    if (firstIncomingMsg.length > 0 && firstReplyMsg.length > 0) {
-                        const firstIncomingCreatedAt = new Date(firstIncomingMsg[0].created_at).getTime() / 1000;
-                        const firstReplyCreatedAt = new Date(firstReplyMsg[0].created_at).getTime() / 1000;
-                        const responseTimeSeconds = Math.floor(firstReplyCreatedAt - firstIncomingCreatedAt);
-                        
+                    if (responseTimeSeconds > 0) {
                         customersRepliedDuringDay.set(fromNumber, {
                             replied: true,
                             replyTimestamp: reply.timestamp,
                             firstMessageTimestamp: firstMessageTimestamp,
+                            firstMessageCreatedAt: firstIncomingCreatedAt,
                             responseTimeSeconds: responseTimeSeconds
                         });
                     } else {
-                        // Fallback to timestamp if created_at not available
-                        const responseTimeSeconds = reply.timestamp - firstMessageTimestamp;
                         customersRepliedDuringDay.set(fromNumber, {
-                            replied: true,
-                            replyTimestamp: reply.timestamp,
+                            replied: false,
+                            replyTimestamp: null,
                             firstMessageTimestamp: firstMessageTimestamp,
-                            responseTimeSeconds: responseTimeSeconds
+                            firstMessageCreatedAt: firstIncomingCreatedAt,
+                            responseTimeSeconds: null
                         });
                     }
                 } else {
@@ -307,6 +303,7 @@ class StatisticsService {
                         replied: false,
                         replyTimestamp: null,
                         firstMessageTimestamp: firstMessageTimestamp,
+                        firstMessageCreatedAt: firstIncomingCreatedAt,
                         responseTimeSeconds: null
                     });
                 }
