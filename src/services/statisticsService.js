@@ -101,13 +101,15 @@ class StatisticsService {
             
             // Check by from_number (phone number) across ALL sessions
             // New customer = belum pernah WA (tidak ada di database sebelumnya di semua session)
+            // Use created_at for comparison (more readable)
+            const dateStartDatetime = dateStr + ' 00:00:00';
             const [messages] = await pool.execute(
                 `SELECT id FROM messages 
                 WHERE from_number = ? 
                 AND direction = 'incoming'
-                AND timestamp < ?
+                AND created_at < ?
                 LIMIT 1`,
-                [fromNumber, dateStartWIB]
+                [fromNumber, dateStartDatetime]
             );
 
             return messages.length === 0;
@@ -118,16 +120,16 @@ class StatisticsService {
     }
 
     /**
-     * Get period index for a given timestamp
-     * @param {number} timestamp - Unix timestamp (seconds)
+     * Get period index for a given created_at datetime
+     * @param {string|Date} created_at - Created_at datetime string or Date object
      * @param {Array} periods - Periods configuration
      * @returns {number|null} Period index or null if not in any period
      */
-    getPeriodIndex(timestamp, periods) {
-        // Timestamp is already in WIB, convert to WIB Date object to get correct hours/minutes
-        const wibDate = timestampToWIB(timestamp * 1000);
-        const hours = wibDate.getHours();
-        const minutes = wibDate.getMinutes();
+    getPeriodIndex(created_at, periods) {
+        // Convert created_at to Date object (already in WIB)
+        const date = created_at instanceof Date ? created_at : new Date(created_at);
+        const hours = date.getHours();
+        const minutes = date.getMinutes();
         const totalMinutes = hours * 60 + minutes;
 
         for (let i = 0; i < periods.length; i++) {
@@ -167,25 +169,22 @@ class StatisticsService {
             const periodsArray = typeof periods === 'string' ? JSON.parse(periods) : periods;
 
             // Get all incoming messages for the date
-            // Timestamp in database is already in WIB, so no need to add 25200
-            // Convert date to timestamp range for comparison
-            const dateObj = new Date(dateStr + 'T00:00:00+07:00'); // WIB timezone start
-            const dateEndObj = new Date(dateStr + 'T23:59:59+07:00'); // WIB timezone end
-            const dateStartWIB = Math.floor(dateObj.getTime() / 1000);
-            const dateEndWIB = Math.floor(dateEndObj.getTime() / 1000);
+            // Use created_at for all calculations (more readable and debuggable)
+            // Convert date to datetime range for comparison
+            const dateStartDatetime = dateStr + ' 00:00:00';
+            const dateEndDatetime = dateStr + ' 23:59:59';
             
-            console.log(`📊 [STATISTICS] Querying messages for date ${dateStr} (WIB timestamp range: ${dateStartWIB} to ${dateEndWIB})`);
+            console.log(`📊 [STATISTICS] Querying messages for date ${dateStr} (created_at range: ${dateStartDatetime} to ${dateEndDatetime})`);
             
             const [incomingMessages] = await pool.execute(
-                `SELECT message_id, contact_id, timestamp, from_number, to_number
+                `SELECT message_id, contact_id, timestamp, from_number, to_number, created_at
                 FROM messages 
                 WHERE session_id = ? 
                 AND direction = 'incoming'
                 AND from_number IS NOT NULL
-                AND timestamp >= ? 
-                AND timestamp <= ?
-                ORDER BY timestamp ASC`,
-                [sessionId, dateStartWIB, dateEndWIB]
+                AND DATE(created_at) = ?
+                ORDER BY created_at ASC`,
+                [sessionId, dateStr]
             );
             
             console.log(`📊 [STATISTICS] Found ${incomingMessages.length} incoming messages for date ${dateStr}`);
@@ -234,10 +233,17 @@ class StatisticsService {
             const customersRepliedDuringDay = new Set();
             
             // First pass: Group messages by period and find first message per customer per period
+            // Use created_at for period determination
             for (const incomingMsg of incomingMessages) {
-                const periodIndex = this.getPeriodIndex(incomingMsg.timestamp, periodsArray);
+                // Skip if created_at is missing
+                if (!incomingMsg.created_at) {
+                    console.warn(`⚠️ [STATISTICS] Message ${incomingMsg.message_id} has no created_at, skipping`);
+                    continue;
+                }
+                
+                const periodIndex = this.getPeriodIndex(incomingMsg.created_at, periodsArray);
                 if (periodIndex === null) {
-                    console.warn(`⚠️ [STATISTICS] Message ${incomingMsg.message_id} at timestamp ${incomingMsg.timestamp} does not fall into any period`);
+                    console.warn(`⚠️ [STATISTICS] Message ${incomingMsg.message_id} at created_at ${incomingMsg.created_at} does not fall into any period`);
                     continue;
                 }
 
@@ -249,11 +255,10 @@ class StatisticsService {
                     };
                 }
 
-                // Track first message per customer per period
+                // Track first message per customer per period (use created_at)
                 const periodCustomerKey = `${periodIndex}_${incomingMsg.from_number}`;
                 if (!customerFirstMessagePerPeriod.has(periodCustomerKey)) {
                     customerFirstMessagePerPeriod.set(periodCustomerKey, {
-                        timestamp: incomingMsg.timestamp,
                         created_at: incomingMsg.created_at
                     });
                 }
@@ -304,21 +309,13 @@ class StatisticsService {
                     continue;
                 }
                 
-                // Get created_at, fallback to timestamp if not available
-                const firstIncomingCreatedAt = firstMessageInfo.created_at 
-                    ? new Date(firstMessageInfo.created_at).getTime() / 1000
-                    : firstMessageInfo.timestamp;
-                
-                // Ensure we have a valid created_at datetime for SQL query
-                const firstIncomingCreatedAtDatetime = firstMessageInfo.created_at 
-                    ? firstMessageInfo.created_at
-                    : new Date(firstMessageInfo.timestamp * 1000).toISOString().slice(0, 19).replace('T', ' ');
-                
-                // Validate datetime string
-                if (!firstIncomingCreatedAtDatetime || firstIncomingCreatedAtDatetime === 'Invalid Date') {
-                    console.warn(`⚠️ [STATISTICS] Invalid created_at datetime for ${fromNumber} in period ${periodIndex}`);
+                // Use created_at directly (no fallback needed)
+                if (!firstMessageInfo.created_at) {
+                    console.warn(`⚠️ [STATISTICS] No created_at for ${fromNumber} in period ${periodIndex}, skipping`);
                     continue;
                 }
+                
+                const firstIncomingCreatedAtDatetime = firstMessageInfo.created_at;
                 
                 // Find first reply: outgoing message where to_number = from_number and created_at > first message created_at in this period
                 // Search across ALL sessions, not just the same session
@@ -341,9 +338,9 @@ class StatisticsService {
                 if (replies.length > 0) {
                     const reply = replies[0];
                     // Response time = selisih created_at reply pertama dengan created_at message pertama customer di periode tersebut
-                    const replyCreatedAt = reply.created_at 
-                        ? new Date(reply.created_at).getTime() / 1000
-                        : reply.timestamp;
+                    // Both in seconds (Unix timestamp)
+                    const firstIncomingCreatedAt = new Date(firstIncomingCreatedAtDatetime).getTime() / 1000;
+                    const replyCreatedAt = new Date(reply.created_at).getTime() / 1000;
                     
                     // Response time in seconds
                     const responseTimeSeconds = Math.floor(replyCreatedAt - firstIncomingCreatedAt);
@@ -359,8 +356,14 @@ class StatisticsService {
             }
             
             // Fourth pass: Assign customers to periods and categorize as new/previous
+            // Use created_at for period determination
             for (const incomingMsg of incomingMessages) {
-                const periodIndex = this.getPeriodIndex(incomingMsg.timestamp, periodsArray);
+                // Skip if created_at is missing
+                if (!incomingMsg.created_at) {
+                    continue;
+                }
+                
+                const periodIndex = this.getPeriodIndex(incomingMsg.created_at, periodsArray);
                 if (periodIndex === null) {
                     continue;
                 }

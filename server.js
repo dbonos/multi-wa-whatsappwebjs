@@ -1864,8 +1864,28 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
         }
         
         const client = clients.get(targetSessionId);
+        const sessionStatus = sessionStatuses.get(targetSessionId);
+        
         if (!client) {
-            return res.status(404).json({ error: 'Session not found or not ready' });
+            console.error(`❌ [SKIP GROUPS] Client not found for sessionId: ${targetSessionId}`);
+            console.error(`📊 [SKIP GROUPS] Available sessions: ${Array.from(clients.keys()).join(', ')}`);
+            console.error(`📊 [SKIP GROUPS] Session status: ${sessionStatus || 'unknown'}`);
+            return res.status(404).json({ 
+                error: 'Session not found or not ready',
+                sessionId: targetSessionId,
+                availableSessions: Array.from(clients.keys()),
+                sessionStatus: sessionStatus || 'unknown'
+            });
+        }
+        
+        // Check if client is ready
+        if (!client.info) {
+            console.warn(`⚠️ [SKIP GROUPS] Client info not available for sessionId: ${targetSessionId}`);
+            return res.status(404).json({ 
+                error: 'Session is not ready yet. Please wait for the session to be fully initialized.',
+                sessionId: targetSessionId,
+                sessionStatus: sessionStatus || 'loading'
+            });
         }
         
         // Get groups from database (contacts that have messages)
