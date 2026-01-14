@@ -256,19 +256,20 @@ class StatisticsService {
                 
                 // Find first reply: outgoing message where to_number = from_number and created_at > first message created_at
                 // Search across ALL sessions, not just the same session
+                // Use DATE() to compare dates and TIME() for time comparison, or use direct datetime comparison
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, created_at, fromAI, to_number, contact_id, session_id
                     FROM messages 
                     WHERE direction = 'outgoing'
                     AND to_number = ?
-                    AND created_at > FROM_UNIXTIME(?)
-                    AND created_at <= FROM_UNIXTIME(?)
+                    AND created_at > ?
+                    AND DATE(created_at) = DATE(?)
                     ORDER BY created_at ASC
                     LIMIT 1`,
                     [
                         fromNumber,
-                        firstIncomingCreatedAt,
-                        dateEndWIB  // End of day (23:59:59)
+                        firstIncomingMsg.created_at, // Use created_at directly from first message
+                        firstIncomingMsg.created_at  // For date comparison
                     ]
                 );
                 
