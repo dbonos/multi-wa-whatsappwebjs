@@ -243,12 +243,21 @@ class StatisticsService {
             // Second pass: Check for replies for each unique customer during the entire day
             // Reply = to_number yang sama dengan from_number dan created_at > created_at message pertama customer di hari itu
             for (const [fromNumber, firstMessageTimestamp] of customerFirstMessageInSession.entries()) {
+                // Skip if fromNumber is invalid
+                if (!fromNumber || fromNumber === 'undefined' || fromNumber === 'null') {
+                    console.warn(`⚠️ [STATISTICS] Skipping invalid fromNumber: ${fromNumber}`);
+                    continue;
+                }
+                
                 // Find the first incoming message object to get its created_at
                 const firstIncomingMsg = incomingMessages.find(msg => 
                     msg.from_number === fromNumber && msg.timestamp === firstMessageTimestamp
                 );
                 
-                if (!firstIncomingMsg) continue;
+                if (!firstIncomingMsg) {
+                    console.warn(`⚠️ [STATISTICS] First incoming message not found for ${fromNumber}`);
+                    continue;
+                }
                 
                 // Get created_at, fallback to timestamp if not available
                 const firstIncomingCreatedAt = firstIncomingMsg.created_at 
@@ -259,6 +268,12 @@ class StatisticsService {
                 const firstIncomingCreatedAtDatetime = firstIncomingMsg.created_at 
                     ? firstIncomingMsg.created_at
                     : new Date(firstMessageTimestamp * 1000).toISOString().slice(0, 19).replace('T', ' ');
+                
+                // Validate datetime string
+                if (!firstIncomingCreatedAtDatetime || firstIncomingCreatedAtDatetime === 'Invalid Date') {
+                    console.warn(`⚠️ [STATISTICS] Invalid created_at datetime for ${fromNumber}, using timestamp fallback`);
+                    continue;
+                }
                 
                 // Find first reply: outgoing message where to_number = from_number and created_at > first message created_at
                 // Search across ALL sessions, not just the same session
