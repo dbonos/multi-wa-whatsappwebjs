@@ -14,6 +14,7 @@ const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { buildAttachmentUrl } = require('./src/utils/attachments');
 
 // Import services and middleware
 const pool = require('./src/config/database');
@@ -116,6 +117,8 @@ app.use('/api/messages/send', messageSendLimiter); // Stricter for sending messa
 
 // Serve static files (frontend)
 app.use(express.static('public'));
+// Serve attachments
+app.use('/attachments', express.static(process.env.ATTACHMENTS_DIR || './attachments'));
 
 // ============================================
 // AUTHENTICATION ENDPOINTS
@@ -999,10 +1002,11 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
 
         // Save message to database FIRST (before attachment to satisfy foreign key constraint)
         // We store created_at/updated_at as WIB wall-clock time (DATETIME after migration).
+        const attachmentUrl = file ? buildAttachmentUrl(file.path) : null;
         const [result] = await pool.execute(
             `INSERT INTO messages 
-             (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, attachment_path, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, 'outgoing', 1, ?, ?, ?, 'sent', ?, ?, NOW(), NOW())`,
+             (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, attachment_path, attachment_url, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'outgoing', 1, ?, ?, ?, 'sent', ?, ?, ?, NOW(), NOW())`,
             [
                 sessionId,
                 sentMessage.id._serialized,
@@ -1015,7 +1019,8 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 // Caption field: only set if there's attachment and caption exists
                 file ? (caption || message || null) : null,
                 getWIBTimestamp(),
-                file ? file.path : null
+                file ? file.path : null,
+                attachmentUrl
             ]
         );
 

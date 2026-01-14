@@ -3,6 +3,8 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const { getWIBTime, getWIBTimestamp, getWIBToday, formatWIBDisplay, convertUTCToWIBTimestamp } = require('../utils/timezone');
+const { buildAttachmentUrl } = require('../utils/attachments');
+const { buildAttachmentUrl } = require('../utils/attachments');
 
 class MessageHandler {
     constructor() {
@@ -316,6 +318,7 @@ class MessageHandler {
             // Determine message type
             let messageType = 'text';
             let attachmentPath = null;
+            let attachmentUrl = null;
             let caption = null;
 
             if (message.hasMedia) {
@@ -330,6 +333,7 @@ class MessageHandler {
 
                 // Save attachment
                 attachmentPath = await this.saveAttachment(sessionId, message.id._serialized, media, messageType);
+                attachmentUrl = buildAttachmentUrl(attachmentPath);
                 caption = message.body || null;
             }
 
@@ -351,8 +355,8 @@ class MessageHandler {
             // We store created_at/updated_at as WIB wall-clock time (DATETIME after migration).
             let [result] = await pool.execute(
                 `INSERT INTO messages 
-                (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'outgoing', 0, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path, attachment_url, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'outgoing', 0, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE
                 updated_at = NOW()`,
                 [
@@ -369,7 +373,8 @@ class MessageHandler {
                     message.hasQuotedMsg || false,
                     replyToMessageId,
                     replyToMessageId,
-                    attachmentPath
+                    attachmentPath,
+                    attachmentUrl
                 ]
             );
             
@@ -408,6 +413,7 @@ class MessageHandler {
                     timestamp: message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
                     attachment: attachmentPath ? {
                         path: attachmentPath,
+                        url: attachmentUrl,
                         type: messageType
                     } : null,
                     direction: 'outgoing',
@@ -498,6 +504,7 @@ class MessageHandler {
             // Determine message type
             let messageType = 'text';
             let attachmentPath = null;
+            let attachmentUrl = null;
             let caption = null;
 
             if (message.hasMedia) {
@@ -512,6 +519,7 @@ class MessageHandler {
 
                 // Save attachment
                 attachmentPath = await this.saveAttachment(sessionId, message.id._serialized, media, messageType);
+                attachmentUrl = buildAttachmentUrl(attachmentPath);
                 caption = message.body || null;
             }
 
@@ -534,8 +542,8 @@ class MessageHandler {
             // We store created_at/updated_at as WIB wall-clock time (DATETIME after migration).
             let [result] = await pool.execute(
                 `INSERT INTO messages 
-                (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'incoming', 0, ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path, attachment_url, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'incoming', 0, ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE
                 updated_at = NOW()`,
                 [
@@ -555,7 +563,8 @@ class MessageHandler {
                     message.hasQuotedMsg || false,
                     replyToMessageId,
                     replyToMessageId,
-                    attachmentPath
+                    attachmentPath,
+                    attachmentUrl
                 ]
             );
             
@@ -595,6 +604,7 @@ class MessageHandler {
                     timestamp: message.timestamp ? convertUTCToWIBTimestamp(message.timestamp) : getWIBTimestamp(),
                     attachment: attachmentPath ? {
                         path: attachmentPath,
+                        url: attachmentUrl,
                         type: messageType
                     } : null,
                     direction: 'incoming',

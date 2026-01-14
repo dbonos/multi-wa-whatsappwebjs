@@ -190,6 +190,15 @@ Password: Set saat pertama kali atau pakai OTP
 
 ---
 
+## 📎 **Attachment URL**
+
+**Update baru:**
+- ✅ `messages.attachment_url` ditambahkan (link publik ke file attachment)
+- ✅ Webhook payload sekarang membawa `message.attachment.url`
+- ✅ Attachment bisa diakses via `/attachments/...`
+
+---
+
 ## 🚀 **Next Steps**
 
 1. ✅ Update MySQL port di server

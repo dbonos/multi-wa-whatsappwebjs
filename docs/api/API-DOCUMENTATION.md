@@ -395,6 +395,7 @@ When messages are forwarded to webhook:
     "timestamp": 1705060800,
     "attachment": {
       "path": "/path/to/file.jpg",
+      "url": "http://<base-url>/attachments/2026-01-13/my_session_1/3EB0_1705060800.jpg",
       "type": "image"
     }
   }
