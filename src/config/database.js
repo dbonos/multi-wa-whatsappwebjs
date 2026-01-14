@@ -37,21 +37,20 @@ const originalGetConnection = pool.getConnection.bind(pool);
 // Setting it globally causes double offset when reading DATETIME columns
 
 /**
- * Ensure every pooled connection uses WIB (+07:00) consistently.
+ * Ensure every pooled connection uses a fixed time_zone consistently.
  *
  * IMPORTANT:
  * - `messages.created_at` is a TIMESTAMP column, so MySQL converts values based on the connection/session time_zone.
- * - Previously we only did `SET time_zone` for write queries; then the same connection could be reused for SELECT,
- *   causing inconsistent reads (sometimes WIB, sometimes SYSTEM/UTC), which broke DATE(created_at)=? filtering and periods.
+ * - For "mode B" (treat DB values as already WIB and DO NOT shift), we must read TIMESTAMP as-is (no +07 conversion).
+ *   The safest approach is to force session time_zone to UTC (+00:00) so TIMESTAMP values are returned without shifting.
  *
- * Strategy:
- * - Set `time_zone = '+07:00'` ONCE per pooled connection (cached via a flag) for both reads and writes.
- * - Do NOT replace CURRENT_TIMESTAMP; with session time_zone set, CURRENT_TIMESTAMP/NOW() are already WIB.
+ * Also:
+ * - We set it ONCE per pooled connection (cached via a flag) for both reads and writes to avoid mixed behavior.
  */
-async function ensureWibTimezone(connection) {
-    if (connection.__wibTimeZoneSet) return;
-    await connection.query("SET time_zone = '+07:00'");
-    connection.__wibTimeZoneSet = true;
+async function ensureFixedTimezone(connection) {
+    if (connection.__fixedTimeZoneSet) return;
+    await connection.query("SET time_zone = '+00:00'");
+    connection.__fixedTimeZoneSet = true;
 }
 
 // Wrap execute() so every connection is consistently WIB
@@ -59,7 +58,7 @@ const originalExecute = pool.execute.bind(pool);
 pool.execute = async function(sql, params) {
     const connection = await originalGetConnection();
     try {
-        await ensureWibTimezone(connection);
+        await ensureFixedTimezone(connection);
         const result = await connection.execute(sql, params);
         return result;
     } catch (error) {
@@ -75,7 +74,7 @@ const originalQuery = pool.query.bind(pool);
 pool.query = async function(sql, params) {
     const connection = await originalGetConnection();
     try {
-        await ensureWibTimezone(connection);
+        await ensureFixedTimezone(connection);
         const result = await connection.query(sql, params);
         return result;
     } finally {
