@@ -250,13 +250,18 @@ class StatisticsService {
                 
                 if (!firstIncomingMsg) continue;
                 
+                // Get created_at, fallback to timestamp if not available
                 const firstIncomingCreatedAt = firstIncomingMsg.created_at 
                     ? new Date(firstIncomingMsg.created_at).getTime() / 1000
                     : firstMessageTimestamp;
                 
+                // Ensure we have a valid created_at datetime for SQL query
+                const firstIncomingCreatedAtDatetime = firstIncomingMsg.created_at 
+                    ? firstIncomingMsg.created_at
+                    : new Date(firstMessageTimestamp * 1000).toISOString().slice(0, 19).replace('T', ' ');
+                
                 // Find first reply: outgoing message where to_number = from_number and created_at > first message created_at
                 // Search across ALL sessions, not just the same session
-                // Use DATE() to compare dates and TIME() for time comparison, or use direct datetime comparison
                 const [replies] = await pool.execute(
                     `SELECT message_id, timestamp, created_at, fromAI, to_number, contact_id, session_id
                     FROM messages 
@@ -268,8 +273,8 @@ class StatisticsService {
                     LIMIT 1`,
                     [
                         fromNumber,
-                        firstIncomingMsg.created_at, // Use created_at directly from first message
-                        firstIncomingMsg.created_at  // For date comparison
+                        firstIncomingCreatedAtDatetime, // Use created_at datetime string
+                        firstIncomingCreatedAtDatetime  // For date comparison
                     ]
                 );
                 
