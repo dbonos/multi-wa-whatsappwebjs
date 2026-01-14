@@ -389,6 +389,9 @@ class StatisticsService {
             // Use created_at for period determination
             // New customer = belum pernah ada di periode sebelumnya di hari itu dan hari sebelumnya
             // Previous customer = sudah pernah ada di periode sebelumnya di hari itu atau hari sebelumnya
+            // IMPORTANT: Only count each unique from_number once per period
+            const processedCustomersPerPeriod = {}; // Track which customers we've already processed per period
+            
             for (const incomingMsg of incomingMessages) {
                 // Skip if created_at is missing
                 if (!incomingMsg.created_at) {
@@ -399,6 +402,19 @@ class StatisticsService {
                 if (periodIndex === null) {
                     continue;
                 }
+
+                // Initialize tracking for this period if needed
+                if (!processedCustomersPerPeriod[periodIndex]) {
+                    processedCustomersPerPeriod[periodIndex] = new Set();
+                }
+                
+                // Skip if we've already processed this customer in this period
+                if (processedCustomersPerPeriod[periodIndex].has(incomingMsg.from_number)) {
+                    continue;
+                }
+                
+                // Mark as processed
+                processedCustomersPerPeriod[periodIndex].add(incomingMsg.from_number);
 
                 // Check if new customer for this period
                 // Pass allIncomingMessagesToday to avoid re-querying database
@@ -413,6 +429,8 @@ class StatisticsService {
                 
                 const customerSet = isNew ? periodCustomers[periodIndex].newCustomers : periodCustomers[periodIndex].previousCustomers;
                 customerSet.add(incomingMsg.from_number);
+                
+                console.log(`📊 [CATEGORIZE] Period ${periodIndex}, ${incomingMsg.from_number}: ${isNew ? 'NEW' : 'PREVIOUS'}`);
             }
             
             // Now calculate statistics per period based on unique customers
