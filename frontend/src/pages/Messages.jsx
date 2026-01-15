@@ -57,6 +57,7 @@ export default function Messages() {
   const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [imageLoading, setImageLoading] = useState(true);
   const pageSize = 20;
 
   useEffect(() => {
@@ -152,6 +153,28 @@ export default function Messages() {
       loadMessages(currentPage);
     }
   }, [currentPage]);
+
+  // Prevent body scroll when image modal is open
+  useEffect(() => {
+    if (selectedImage) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      // Prevent scroll
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      
+      return () => {
+        // Restore scroll
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [selectedImage]);
 
   const loadSessions = async () => {
     try {
@@ -739,7 +762,10 @@ export default function Messages() {
                                 alt={msg.caption || 'Image'}
                                 className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-gray-200 dark:border-gray-700"
                                 style={{ maxHeight: '300px' }}
-                                onClick={() => setSelectedImage(msg.attachment_url)}
+                                onClick={() => {
+                                  setImageLoading(true);
+                                  setSelectedImage(msg.attachment_url);
+                                }}
                                 onError={(e) => {
                                   e.target.style.display = 'none';
                                 }}
@@ -869,30 +895,77 @@ export default function Messages() {
       )}
 
       {/* Image Preview Modal */}
-      {selectedImage && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          onClick={() => setSelectedImage(null)}
-        >
-          <div className="relative max-w-7xl max-h-[90vh] p-4">
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute top-4 right-4 z-10 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-            >
-              <XCircle className="w-6 h-6" />
-            </button>
-            <img
-              src={selectedImage}
-              alt="Preview"
-              className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md"
+            onClick={() => {
+              setSelectedImage(null);
+              setImageLoading(true);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="relative max-w-7xl max-h-[95vh] p-4 md:p-6"
               onClick={(e) => e.stopPropagation()}
-              onError={(e) => {
-                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23ddd" width="400" height="300"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="20" dy="10.5" font-weight="bold" x="50%25" y="50%25" text-anchor="middle"%3EFailed to load image%3C/text%3E%3C/svg%3E';
-              }}
-            />
-          </div>
-        </div>
-      )}
+            >
+              {/* Close Button */}
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 }}
+                onClick={() => {
+                  setSelectedImage(null);
+                  setImageLoading(true);
+                }}
+                className="absolute -top-2 -right-2 z-20 p-3 bg-white/95 hover:bg-white rounded-full text-gray-800 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110"
+                aria-label="Close image preview"
+              >
+                <XCircle className="w-6 h-6" />
+              </motion.button>
+
+              {/* Image Container */}
+              <div className="relative bg-gray-900/50 rounded-xl overflow-hidden shadow-2xl">
+                {imageLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-10">
+                    <Loader2 className="w-12 h-12 text-white animate-spin" />
+                  </div>
+                )}
+                <motion.img
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: imageLoading ? 0 : 1 }}
+                  transition={{ duration: 0.3 }}
+                  src={selectedImage}
+                  alt="Image preview"
+                  className="max-w-full max-h-[95vh] w-auto h-auto object-contain"
+                  onLoad={() => setImageLoading(false)}
+                  onError={(e) => {
+                    setImageLoading(false);
+                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23ddd" width="400" height="300"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="20" dy="10.5" font-weight="bold" x="50%25" y="50%25" text-anchor="middle"%3EFailed to load image%3C/text%3E%3C/svg%3E';
+                  }}
+                />
+              </div>
+
+              {/* Click hint */}
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="text-center mt-4 text-white/70 text-sm"
+              >
+                Click outside to close
+              </motion.p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
