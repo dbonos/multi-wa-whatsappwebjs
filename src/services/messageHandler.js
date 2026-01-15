@@ -389,7 +389,7 @@ class MessageHandler {
             let [result] = await pool.execute(
                 `INSERT INTO messages 
                 (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path, attachment_url, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'outgoing', 0, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                VALUES (?, ?, ?, ?, ?, 'outgoing', 0, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE
                 updated_at = NOW()`,
                 [
@@ -580,7 +580,7 @@ class MessageHandler {
             let [result] = await pool.execute(
                 `INSERT INTO messages 
                 (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, is_forwarded, has_quoted_msg, quoted_msg_id, reply_to_message_id, attachment_path, attachment_url, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'incoming', 0, ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                VALUES (?, ?, ?, ?, ?, 'incoming', 0, ?, ?, ?, 'delivered', ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE
                 updated_at = NOW()`,
                 [
