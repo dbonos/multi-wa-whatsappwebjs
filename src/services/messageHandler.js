@@ -60,6 +60,44 @@ class MessageHandler {
             }
 
             const safeParam = (value) => (value === undefined ? null : value);
+            const params = [
+                safeParam(sessionId),
+                safeParam(contactId),
+                safeParam(phoneNumber),
+                safeParam(contact.name || null),
+                safeParam(contact.pushname || null),
+                !!contact.isBusiness,
+                !!contact.isMyContact,
+                !!contact.isGroup,
+                safeParam(lidOriginal),
+                safeParam(profilePictureUrl),
+                safeParam(phoneNumber), // For ON DUPLICATE KEY UPDATE
+                safeParam(contact.name || null),
+                safeParam(contact.pushname || null),
+                safeParam(profilePictureUrl)
+            ];
+            const paramNames = [
+                'sessionId',
+                'contactId',
+                'phoneNumber',
+                'name',
+                'pushname',
+                'isBusiness',
+                'isMyContact',
+                'isGroup',
+                'lidOriginal',
+                'profilePictureUrl',
+                'dupPhoneNumber',
+                'dupName',
+                'dupPushname',
+                'dupProfilePictureUrl'
+            ];
+            if (params.some((value) => value === undefined)) {
+                const undefinedParams = paramNames
+                    .map((name, index) => ({ name, value: params[index] }))
+                    .filter((entry) => entry.value === undefined);
+                console.warn('⚠️ [DB] Undefined contact params detected:', undefinedParams);
+            }
 
             // Save or update contact
             const [result] = await pool.execute(
@@ -72,22 +110,7 @@ class MessageHandler {
                 pushname = COALESCE(?, pushname),
                 profile_pic_url = COALESCE(?, profile_pic_url),
                 updated_at = CURRENT_TIMESTAMP`,
-                [
-                    safeParam(sessionId),
-                    safeParam(contactId),
-                    safeParam(phoneNumber),
-                    safeParam(contact.name || null),
-                    safeParam(contact.pushname || null),
-                    !!contact.isBusiness,
-                    !!contact.isMyContact,
-                    !!contact.isGroup,
-                    safeParam(lidOriginal),
-                    safeParam(profilePictureUrl),
-                    safeParam(phoneNumber), // For ON DUPLICATE KEY UPDATE
-                    safeParam(contact.name || null),
-                    safeParam(contact.pushname || null),
-                    safeParam(profilePictureUrl)
-                ]
+                params
             );
 
             return { contactId, phoneNumber, lidOriginal };
