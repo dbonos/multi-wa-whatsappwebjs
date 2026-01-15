@@ -103,6 +103,7 @@
 - [x] Support semua file types
 - [x] Database tracking
 - [x] Cleanup utilities
+- [x] Public attachment URL uses per-session domain setting
 
 ## 📋 Implementation Status
 

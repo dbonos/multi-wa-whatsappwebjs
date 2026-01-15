@@ -73,6 +73,17 @@ GET /api/sessions/:sessionId
 Authorization: Bearer <token>
 ```
 
+### Update Session Public Domain (Admin)
+```http
+PUT /api/sessions/:sessionId/domain
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "publicDomain": "example.com"
+}
+```
+
 ### Get QR Code (Auto-refresh)
 ```http
 GET /api/sessions/:sessionId/qr
