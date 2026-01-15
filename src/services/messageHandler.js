@@ -429,6 +429,10 @@ class MessageHandler {
 
     // Save incoming message to database
     async saveIncomingMessage(sessionId, message) {
+        let contactId = null;
+        let fromNumber = null;
+        let finalContactId = null;
+        let finalFromNumber = null;
         try {
             // Skip status messages
             if (message.from === 'status@broadcast' || message.to === 'status@broadcast') {
@@ -443,8 +447,8 @@ class MessageHandler {
             
             // Check if this is a group
             const isGroup = chat.isGroup || false;
-            const contactId = contact.id._serialized;
-            const fromNumber = contact.number || null;
+            contactId = contact.id._serialized;
+            fromNumber = contact.number || null;
             
             // For groups, also get chat.id which might be different from contact.id
             const chatId = chat.id ? chat.id._serialized : contactId;
@@ -465,8 +469,8 @@ class MessageHandler {
             // Update fromNumber and contactId with contactInfo if available
             // CRITICAL: Use the contact_id from saveContact (after @lid conversion) for skip check
             // For groups, also check with chatId as it might be the actual group ID
-            const finalContactId = contactInfo?.contactId || contactId;
-            const finalFromNumber = contactInfo?.phoneNumber || fromNumber;
+            finalContactId = contactInfo?.contactId || contactId;
+            finalFromNumber = contactInfo?.phoneNumber || fromNumber;
             
             // For groups, check skip with both contactId and chatId
             // Sometimes chat.id is different from contact.id for groups
@@ -619,8 +623,8 @@ class MessageHandler {
             console.error(`❌ [MESSAGE HANDLER] Message details:`, {
                 sessionId: sessionId,
                 messageId: message.id._serialized,
-                contactId: finalContactId,
-                fromNumber: finalFromNumber
+                contactId: finalContactId || contactId,
+                fromNumber: finalFromNumber || fromNumber
             });
             return { success: false, error: error.message };
         }
