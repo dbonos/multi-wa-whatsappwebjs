@@ -13,12 +13,12 @@ git pull origin main
 # Run database migrations (best-effort)
 echo "🗄️  Running database migration..."
 for MIG in database/migrations/create_statistics_tables.sql database/migrations/convert_timestamp_to_datetime_wib.sql database/migrations/add_attachment_url_to_messages.sql database/migrations/add_public_domain_to_sessions.sql; do
-  if [ -f \"$MIG\" ]; then
-      mysql -u root -p${MYSQL_PASSWORD:-} wa_manager < \"$MIG\" 2>/dev/null || {
-          echo \"⚠️  Migration $MIG might have failed or already applied. Continuing...\"
+  if [ -f "$MIG" ]; then
+      mysql -u root -p${MYSQL_PASSWORD:-} wa_manager < "$MIG" 2>/dev/null || {
+          echo "⚠️  Migration $MIG might have failed or already applied. Continuing..."
       }
   else
-      echo \"⚠️  Migration file not found: $MIG (skipping)\"
+      echo "⚠️  Migration file not found: $MIG (skipping)"
   fi
 done
 
