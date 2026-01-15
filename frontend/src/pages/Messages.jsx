@@ -56,6 +56,7 @@ export default function Messages() {
   const [totalMessages, setTotalMessages] = useState(0);
   const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedImage, setSelectedImage] = useState(null);
   const pageSize = 20;
 
   useEffect(() => {
@@ -730,12 +731,37 @@ export default function Messages() {
                             </div>
                           )}
 
+                          {/* Image Preview */}
+                          {msg.message_type === 'image' && msg.attachment_url && (
+                            <div className="mt-2 mb-2">
+                              <img
+                                src={msg.attachment_url}
+                                alt={msg.caption || 'Image'}
+                                className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-gray-200 dark:border-gray-700"
+                                style={{ maxHeight: '300px' }}
+                                onClick={() => setSelectedImage(msg.attachment_url)}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          )}
+
                           <p className={`text-gray-700 ${isDeleted ? 'line-through' : ''}`}>
-                            {msg.body || msg.caption || '(No text)'}
+                            {msg.body || msg.caption || (msg.message_type === 'image' ? '' : '(No text)')}
                           </p>
-                          {msg.file_name && (
+                          
+                          {/* File attachment info (for non-image files) */}
+                          {msg.file_name && msg.message_type !== 'image' && (
                             <p className="text-sm text-gray-500 mt-1">
                               📎 {msg.file_name} ({msg.file_type})
+                            </p>
+                          )}
+                          
+                          {/* Image file info */}
+                          {msg.message_type === 'image' && msg.file_name && (
+                            <p className="text-sm text-gray-500 mt-1">
+                              📷 {msg.file_name}
                             </p>
                           )}
 
@@ -840,6 +866,32 @@ export default function Messages() {
           sessionId={selectedSession}
           onClose={() => setSelectedMessageId(null)}
         />
+      )}
+
+      {/* Image Preview Modal */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-7xl max-h-[90vh] p-4">
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-4 right-4 z-10 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+            <img
+              src={selectedImage}
+              alt="Preview"
+              className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+              onError={(e) => {
+                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23ddd" width="400" height="300"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="20" dy="10.5" font-weight="bold" x="50%25" y="50%25" text-anchor="middle"%3EFailed to load image%3C/text%3E%3C/svg%3E';
+              }}
+            />
+          </div>
+        </div>
       )}
     </motion.div>
   );

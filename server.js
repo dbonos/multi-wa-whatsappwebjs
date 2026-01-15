@@ -1101,7 +1101,7 @@ app.get('/api/messages', authenticate, async (req, res) => {
         const offsetNum = parseInt(offset) || 0;
 
         let query = `
-            SELECT m.*, a.file_name, a.file_path, a.file_type
+            SELECT m.*, a.file_name, a.file_path, a.file_type, m.attachment_url
             FROM messages m
             LEFT JOIN attachments a ON a.message_id = m.message_id
             WHERE 1=1
