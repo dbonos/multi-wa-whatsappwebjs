@@ -680,20 +680,24 @@ class MessageHandler {
             const buffer = Buffer.from(media.data, 'base64');
             await fs.writeFile(filePath, buffer);
 
-            // Save to database
-            await pool.execute(
-                `INSERT INTO attachments (message_id, session_id, file_name, file_path, file_type, mime_type, file_size)
-                VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    messageId,
-                    sessionId,
-                    fileName,
-                    filePath,
-                    messageType,
-                    media.mimetype,
-                    buffer.length
-                ]
-            );
+            // Save to database (best-effort so message insert can still succeed)
+            try {
+                await pool.execute(
+                    `INSERT INTO attachments (message_id, session_id, file_name, file_path, file_type, mime_type, file_size)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        messageId,
+                        sessionId,
+                        fileName,
+                        filePath,
+                        messageType,
+                        media.mimetype,
+                        buffer.length
+                    ]
+                );
+            } catch (dbError) {
+                console.warn('⚠️ [ATTACHMENTS] Failed to insert attachment row:', dbError.message);
+            }
 
             return filePath;
         } catch (error) {
