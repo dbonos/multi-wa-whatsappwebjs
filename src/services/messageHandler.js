@@ -26,6 +26,9 @@ class MessageHandler {
     // Convert @lid to phone number and save contact
     async saveContact(sessionId, contact) {
         try {
+            if (!contact || !contact.id || !contact.id._serialized) {
+                return null;
+            }
             const contactId = contact.id._serialized;
             let phoneNumber = null;
             let lidOriginal = null;
@@ -33,7 +36,7 @@ class MessageHandler {
             // Extract phone number
             if (contact.number) {
                 phoneNumber = contact.number;
-            } else if (contact.id.user) {
+            } else if (contact.id && contact.id.user) {
                 phoneNumber = contact.id.user;
             } else if (contactId.includes('@c.us')) {
                 phoneNumber = contactId.replace('@c.us', '');
