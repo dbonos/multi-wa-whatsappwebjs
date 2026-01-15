@@ -619,8 +619,8 @@ class MessageHandler {
             console.error(`❌ [MESSAGE HANDLER] Message details:`, {
                 sessionId: sessionId,
                 messageId: message.id._serialized,
-                contactId: contactId,
-                fromNumber: fromNumber
+                contactId: finalContactId,
+                fromNumber: finalFromNumber
             });
             return { success: false, error: error.message };
         }
