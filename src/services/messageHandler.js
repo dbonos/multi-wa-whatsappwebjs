@@ -30,6 +30,9 @@ class MessageHandler {
                 return null;
             }
             const contactId = contact.id._serialized;
+            if (!contactId) {
+                return null;
+            }
             let phoneNumber = null;
             let lidOriginal = null;
 
@@ -56,6 +59,8 @@ class MessageHandler {
                 // Profile picture not available or error - ignore
             }
 
+            const safeParam = (value) => (value === undefined ? null : value);
+
             // Save or update contact
             const [result] = await pool.execute(
                 `INSERT INTO contacts 
@@ -68,18 +73,20 @@ class MessageHandler {
                 profile_pic_url = COALESCE(?, profile_pic_url),
                 updated_at = CURRENT_TIMESTAMP`,
                 [
-                    sessionId, contactId, phoneNumber,
-                    contact.name || null,
-                    contact.pushname || null,
-                    contact.isBusiness || false,
-                    contact.isMyContact || false,
-                    contact.isGroup || false,
-                    lidOriginal,
-                    profilePictureUrl,
-                    phoneNumber, // For ON DUPLICATE KEY UPDATE
-                    contact.name || null,
-                    contact.pushname || null,
-                    profilePictureUrl
+                    safeParam(sessionId),
+                    safeParam(contactId),
+                    safeParam(phoneNumber),
+                    safeParam(contact.name || null),
+                    safeParam(contact.pushname || null),
+                    !!contact.isBusiness,
+                    !!contact.isMyContact,
+                    !!contact.isGroup,
+                    safeParam(lidOriginal),
+                    safeParam(profilePictureUrl),
+                    safeParam(phoneNumber), // For ON DUPLICATE KEY UPDATE
+                    safeParam(contact.name || null),
+                    safeParam(contact.pushname || null),
+                    safeParam(profilePictureUrl)
                 ]
             );
 
