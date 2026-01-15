@@ -48,6 +48,7 @@ export default function Messages() {
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [directionFilter, setDirectionFilter] = useState('outgoing');
   const [showDeleted, setShowDeleted] = useState(false);
   const [deletedMessages, setDeletedMessages] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -143,7 +144,7 @@ export default function Messages() {
       setCurrentPage(1);
       loadMessages(1);
     }
-  }, [selectedSession, filterStatus, showDeleted]);
+  }, [selectedSession, filterStatus, showDeleted, directionFilter]);
 
   useEffect(() => {
     if (selectedSession && currentPage > 1) {
@@ -183,7 +184,8 @@ export default function Messages() {
         sessionId: selectedSession, 
         limit: pageSize, 
         offset,
-        includeDeleted: showDeleted 
+        includeDeleted: showDeleted,
+        direction: directionFilter
       };
       const response = await messagesAPI.list(params);
       let msgs = response.data.messages || [];
@@ -196,6 +198,7 @@ export default function Messages() {
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         msgs = msgs.filter((m) => 
+          (m.from_number && m.from_number.toLowerCase().includes(query)) ||
           (m.to_number && m.to_number.toLowerCase().includes(query)) ||
           (m.body && m.body.toLowerCase().includes(query)) ||
           (m.caption && m.caption.toLowerCase().includes(query))
@@ -582,7 +585,13 @@ export default function Messages() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between mb-4">
-              <CardTitle>Sent Messages</CardTitle>
+              <CardTitle>
+                {directionFilter === 'incoming'
+                  ? 'Incoming Messages'
+                  : directionFilter === 'all'
+                    ? 'All Messages'
+                    : 'Sent Messages'}
+              </CardTitle>
               <div className="flex items-center gap-2">
                 <Button
                   variant={showDeleted ? "default" : "outline"}
@@ -597,6 +606,15 @@ export default function Messages() {
                 </Button>
                 <div className="flex items-center gap-2">
                   <Filter className="w-4 h-4 text-gray-500" />
+                  <select
+                    value={directionFilter}
+                    onChange={(e) => setDirectionFilter(e.target.value)}
+                    className="input py-1 text-sm"
+                  >
+                    <option value="outgoing">Outgoing</option>
+                    <option value="incoming">Incoming</option>
+                    <option value="all">All</option>
+                  </select>
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
@@ -685,7 +703,7 @@ export default function Messages() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <span className="font-medium text-gray-900 dark:text-gray-100">
-                                To: {msg.to_number || 'Unknown'}
+                                {msg.direction === 'incoming' ? 'From' : 'To'}: {msg.direction === 'incoming' ? (msg.from_number || 'Unknown') : (msg.to_number || 'Unknown')}
                               </span>
                             <StatusIcon className={`w-4 h-4 ${statusColor}`} />
                             <Badge variant={msg.status === 'read' ? 'success' : msg.status === 'failed' ? 'destructive' : 'info'}>

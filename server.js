@@ -1096,7 +1096,7 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
 // Get sent messages list
 app.get('/api/messages', authenticate, async (req, res) => {
     try {
-        const { sessionId, limit = 50, offset = 0, includeDeleted = false } = req.query;
+        const { sessionId, limit = 50, offset = 0, includeDeleted = false, direction } = req.query;
         const limitNum = parseInt(limit) || 50;
         const offsetNum = parseInt(offset) || 0;
 
@@ -1104,9 +1104,15 @@ app.get('/api/messages', authenticate, async (req, res) => {
             SELECT m.*, a.file_name, a.file_path, a.file_type
             FROM messages m
             LEFT JOIN attachments a ON a.message_id = m.message_id
-            WHERE m.direction = 'outgoing'
+            WHERE 1=1
         `;
         const params = [];
+
+        const directionFilter = direction || 'outgoing';
+        if (directionFilter !== 'all') {
+            query += ' AND m.direction = ?';
+            params.push(directionFilter);
+        }
 
         if (sessionId) {
             query += ' AND m.session_id = ?';

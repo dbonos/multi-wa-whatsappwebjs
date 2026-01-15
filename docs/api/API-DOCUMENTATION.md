@@ -129,6 +129,15 @@ Content-Type: application/json
 }
 ```
 
+### Get Messages (with Direction Filter)
+```http
+GET /api/messages?sessionId=my_session_1&direction=outgoing
+Authorization: Bearer <token>
+```
+
+**Query Params:**
+- `direction`: `outgoing` (default), `incoming`, or `all`
+
 ### Send Message (With Attachment)
 ```http
 POST /api/messages/send
