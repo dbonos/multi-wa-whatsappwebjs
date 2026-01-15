@@ -13,9 +13,10 @@ function getAttachmentsBaseUrl() {
     );
 }
 
-function buildAttachmentUrl(attachmentPath) {
+function buildAttachmentUrl(attachmentPath, baseUrlOverride = null) {
     if (!attachmentPath) return null;
-    const baseUrl = getAttachmentsBaseUrl().replace(/\/+$/, '');
+    const baseUrlSource = baseUrlOverride || getAttachmentsBaseUrl();
+    const baseUrl = baseUrlSource.replace(/\/+$/, '');
     const attachmentsDir = getAttachmentsDir();
     const relativePath = path.relative(attachmentsDir, attachmentPath);
     if (!relativePath || relativePath.startsWith('..')) {

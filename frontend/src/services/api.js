@@ -157,6 +157,9 @@ export const sessionsAPI = {
   getQR: (sessionId) => api.get(`/sessions/${sessionId}/qr`),
   
   getStatus: (sessionId) => api.get(`/sessions/${sessionId}/status`),
+
+  updateDomain: (sessionId, publicDomain) =>
+    api.put(`/sessions/${sessionId}/domain`, { publicDomain }),
   
   delete: (sessionId) => api.delete(`/sessions/${sessionId}`),
 };

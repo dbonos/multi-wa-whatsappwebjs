@@ -497,6 +497,30 @@ app.get('/api/sessions/:sessionId', authenticate, requireSessionOwner, async (re
     }
 });
 
+// Update session public domain (Admin only)
+app.put('/api/sessions/:sessionId/domain', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { publicDomain } = req.body;
+
+        if (publicDomain !== null && publicDomain !== undefined && typeof publicDomain !== 'string') {
+            return res.status(400).json({ error: 'publicDomain must be a string' });
+        }
+
+        const normalizedDomain = publicDomain ? publicDomain.trim() : null;
+
+        await pool.execute(
+            `UPDATE sessions SET public_domain = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?`,
+            [normalizedDomain || null, sessionId]
+        );
+
+        res.json({ success: true, public_domain: normalizedDomain || null });
+    } catch (error) {
+        console.error('Error updating session domain:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get QR code (with auto-refresh support)
 app.get('/api/sessions/:sessionId/qr', authenticate, async (req, res) => {
     try {

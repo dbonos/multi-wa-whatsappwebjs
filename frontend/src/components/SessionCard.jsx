@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { sessionsAPI } from '../services/api';
 import QRScanner from './QRScanner';
@@ -21,10 +21,16 @@ const statusConfig = {
   stopped: { color: 'gray', icon: XCircle, label: 'Stopped' },
 };
 
-export default function SessionCard({ session, onDelete, onRefresh }) {
+export default function SessionCard({ session, onDelete, onRefresh, isAdmin = false }) {
   const [showQR, setShowQR] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [status, setStatus] = useState(session.realtime_status || session.status);
+  const [publicDomain, setPublicDomain] = useState(session.public_domain || '');
+  const [savingDomain, setSavingDomain] = useState(false);
+
+  useEffect(() => {
+    setPublicDomain(session.public_domain || '');
+  }, [session.public_domain]);
 
   const StatusIcon = statusConfig[status]?.icon || Loader2;
   const statusColor = statusConfig[status]?.color || 'gray';
@@ -52,6 +58,19 @@ export default function SessionCard({ session, onDelete, onRefresh }) {
       onRefresh?.(session.session_id);
     } catch (error) {
       console.error('Failed to refresh status:', error);
+    }
+  };
+
+  const handleSaveDomain = async () => {
+    if (savingDomain) return;
+    setSavingDomain(true);
+    try {
+      await sessionsAPI.updateDomain(session.session_id, publicDomain);
+      onRefresh?.(session.session_id);
+    } catch (error) {
+      alert('Failed to update domain: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setSavingDomain(false);
     }
   };
 
@@ -106,6 +125,32 @@ export default function SessionCard({ session, onDelete, onRefresh }) {
             <p className="font-semibold text-gray-900">{session.contact_count || 0}</p>
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2">
+              Public Domain (Attachment URL)
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={publicDomain}
+                onChange={(e) => setPublicDomain(e.target.value)}
+                placeholder="example.com"
+                className="input flex-1 min-w-0"
+                disabled={savingDomain}
+              />
+              <button
+                type="button"
+                onClick={handleSaveDomain}
+                disabled={savingDomain}
+                className="btn btn-secondary w-full sm:w-auto"
+              >
+                {savingDomain ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-2">
           {status === 'qr_generated' || status === 'initializing' ? (

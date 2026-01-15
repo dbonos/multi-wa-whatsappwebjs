@@ -237,6 +237,7 @@ export default function Dashboard() {
                   session={session}
                   onDelete={handleDelete}
                   onRefresh={loadSessions}
+                  isAdmin={isAdmin}
                 />
                 {isAdmin && (
                   <motion.div

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     session_id VARCHAR(100) UNIQUE NOT NULL,
     phone_number VARCHAR(20),
     display_name VARCHAR(255),
+    public_domain VARCHAR(255),
     status ENUM('initializing', 'qr_generated', 'authenticated', 'ready', 'disconnected', 'stopped') DEFAULT 'initializing',
     qr_code TEXT,
     qr_expires_at TIMESTAMP NULL,

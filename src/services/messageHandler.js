@@ -9,6 +9,7 @@ class MessageHandler {
     constructor() {
         this.attachmentsDir = process.env.ATTACHMENTS_DIR || './attachments';
         this.webhookBaseUrl = process.env.WEBHOOK_BASE_URL || '';
+        this.sessionAttachmentBaseUrlCache = new Map();
         this.initAttachmentsDir();
     }
 
@@ -366,7 +367,8 @@ class MessageHandler {
 
                 // Save attachment
                 attachmentPath = await this.saveAttachment(sessionId, message.id._serialized, media, messageType);
-                attachmentUrl = buildAttachmentUrl(attachmentPath);
+                const baseUrlOverride = await this.getSessionAttachmentBaseUrl(sessionId);
+                attachmentUrl = buildAttachmentUrl(attachmentPath, baseUrlOverride);
                 caption = message.body || null;
             }
 
@@ -556,7 +558,8 @@ class MessageHandler {
 
                 // Save attachment
                 attachmentPath = await this.saveAttachment(sessionId, message.id._serialized, media, messageType);
-                attachmentUrl = buildAttachmentUrl(attachmentPath);
+                const baseUrlOverride = await this.getSessionAttachmentBaseUrl(sessionId);
+                attachmentUrl = buildAttachmentUrl(attachmentPath, baseUrlOverride);
                 caption = message.body || null;
             }
 
@@ -702,6 +705,50 @@ class MessageHandler {
             return filePath;
         } catch (error) {
             console.error('Error saving attachment:', error);
+            return null;
+        }
+    }
+
+    async getSessionAttachmentBaseUrl(sessionId) {
+        if (!sessionId) return null;
+
+        const cached = this.sessionAttachmentBaseUrlCache.get(sessionId);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.baseUrl;
+        }
+
+        try {
+            const [rows] = await pool.execute(
+                'SELECT public_domain FROM sessions WHERE session_id = ? LIMIT 1',
+                [sessionId]
+            );
+            const rawDomain = rows && rows[0] ? rows[0].public_domain : null;
+            if (!rawDomain || !String(rawDomain).trim()) {
+                this.sessionAttachmentBaseUrlCache.set(sessionId, {
+                    baseUrl: null,
+                    expiresAt: Date.now() + 60 * 1000
+                });
+                return null;
+            }
+
+            let baseUrl = String(rawDomain).trim();
+            if (!/^https?:\/\//i.test(baseUrl)) {
+                baseUrl = `http://${baseUrl}`;
+            }
+
+            const withoutScheme = baseUrl.replace(/^https?:\/\//i, '');
+            if (!/:\d+/.test(withoutScheme)) {
+                baseUrl = `${baseUrl}:3000`;
+            }
+
+            baseUrl = baseUrl.replace(/\/+$/, '');
+            this.sessionAttachmentBaseUrlCache.set(sessionId, {
+                baseUrl,
+                expiresAt: Date.now() + 5 * 60 * 1000
+            });
+            return baseUrl;
+        } catch (error) {
+            console.warn('⚠️ [ATTACHMENTS] Failed to load session domain:', error.message);
             return null;
         }
     }
