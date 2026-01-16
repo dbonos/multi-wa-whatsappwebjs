@@ -500,29 +500,48 @@ class MessageHandler {
             });
             
             // Save contact first (with @lid conversion) - needed to get correct contact_id
-            const contactInfo = await this.saveContact(sessionId, contact);
+            console.log(`💾 [MESSAGE HANDLER] Saving contact for message: ${message.id._serialized}`);
+            let contactInfo = null;
+            try {
+                contactInfo = await this.saveContact(sessionId, contact);
+                console.log(`✅ [MESSAGE HANDLER] Contact saved, contactInfo:`, contactInfo ? { contactId: contactInfo.contactId, phoneNumber: contactInfo.phoneNumber } : 'null');
+            } catch (contactError) {
+                console.error(`❌ [MESSAGE HANDLER] Error saving contact:`, contactError);
+                console.error(`❌ [MESSAGE HANDLER] Contact error stack:`, contactError.stack);
+                // Continue with original contactId/fromNumber if saveContact fails
+            }
             
             // Update fromNumber and contactId with contactInfo if available
             // CRITICAL: Use the contact_id from saveContact (after @lid conversion) for skip check
             // For groups, also check with chatId as it might be the actual group ID
             finalContactId = contactInfo?.contactId || contactId;
             finalFromNumber = contactInfo?.phoneNumber || fromNumber;
+            console.log(`📨 [MESSAGE HANDLER] Final contact info:`, { finalContactId, finalFromNumber, originalContactId: contactId, originalFromNumber: fromNumber });
             
             // For groups, check skip with both contactId and chatId
             // Sometimes chat.id is different from contact.id for groups
+            console.log(`🔍 [MESSAGE HANDLER] Checking skip list...`);
             let shouldSkip = false;
-            if (isGroup) {
-                // Check with finalContactId first
-                shouldSkip = await this.shouldSkipMessage(sessionId, finalContactId, finalFromNumber, isGroup);
-                
-                // If not skipped, also check with chatId (might be different format)
-                if (!shouldSkip && chatId !== finalContactId) {
-                    console.log(`🔍 [SKIP CHECK] Also checking with chatId: ${chatId} (different from contactId: ${finalContactId})`);
-                    shouldSkip = await this.shouldSkipMessage(sessionId, chatId, finalFromNumber, isGroup);
+            try {
+                if (isGroup) {
+                    // Check with finalContactId first
+                    shouldSkip = await this.shouldSkipMessage(sessionId, finalContactId, finalFromNumber, isGroup);
+                    
+                    // If not skipped, also check with chatId (might be different format)
+                    if (!shouldSkip && chatId !== finalContactId) {
+                        console.log(`🔍 [SKIP CHECK] Also checking with chatId: ${chatId} (different from contactId: ${finalContactId})`);
+                        shouldSkip = await this.shouldSkipMessage(sessionId, chatId, finalFromNumber, isGroup);
+                    }
+                } else {
+                    // For non-groups, use the standard check
+                    shouldSkip = await this.shouldSkipMessage(sessionId, finalContactId, finalFromNumber, isGroup);
                 }
-            } else {
-                // For non-groups, use the standard check
-                shouldSkip = await this.shouldSkipMessage(sessionId, finalContactId, finalFromNumber, isGroup);
+                console.log(`✅ [MESSAGE HANDLER] Skip check completed, shouldSkip: ${shouldSkip}`);
+            } catch (skipError) {
+                console.error(`❌ [MESSAGE HANDLER] Error checking skip list:`, skipError);
+                console.error(`❌ [MESSAGE HANDLER] Skip error stack:`, skipError.stack);
+                // If error, don't skip (save message to be safe)
+                shouldSkip = false;
             }
             
             console.log(`📨 [MESSAGE HANDLER] Should skip: ${shouldSkip}`, {
