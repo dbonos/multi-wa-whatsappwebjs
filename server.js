@@ -41,6 +41,9 @@ const qrCodes = new Map(); // sessionId -> qrCode
 const sessionStatuses = new Map(); // sessionId -> status
 const skipGroupsCache = new Map(); // sessionId -> { groups: [], timestamp: Date }
 const SKIP_GROUPS_CACHE_TTL = 30000; // Cache for 30 seconds
+const skipGroupsPendingRequests = new Map(); // sessionId -> Promise (request deduplication)
+const qrRegenerationCount = new Map(); // sessionId -> count (track QR regenerations)
+const MAX_QR_REGENERATIONS = 5; // Maximum QR code regenerations before auto-destroy
 
 // Initialize scheduler service
 const schedulerService = new SchedulerService(clients);
@@ -2240,6 +2243,19 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             return res.json({ success: true, groups: cached.groups, cached: true });
         }
         
+        // Request deduplication: if there's already a pending request for this session, wait for it
+        const pendingRequest = skipGroupsPendingRequests.get(targetSessionId);
+        if (pendingRequest) {
+            console.log(`⏳ [SKIP GROUPS] Waiting for pending request for ${targetSessionId}`);
+            try {
+                const result = await pendingRequest;
+                return res.json({ success: true, groups: result, cached: false, deduplicated: true });
+            } catch (error) {
+                // If pending request failed, continue to make a new request
+                console.warn(`⚠️ [SKIP GROUPS] Pending request failed, making new request`);
+            }
+        }
+        
         const client = clients.get(targetSessionId);
         const sessionStatus = sessionStatuses.get(targetSessionId);
         
@@ -3040,6 +3056,40 @@ function createClient(sessionId) {
     client.on('qr', async (qr) => {
         console.log(`📱 [QR CODE] QR Code received for session: ${sessionId}`);
         console.log(`📱 [QR CODE] QR Code length: ${qr.length} characters`);
+        
+        // Track QR regeneration count to prevent infinite loops
+        const currentCount = qrRegenerationCount.get(sessionId) || 0;
+        qrRegenerationCount.set(sessionId, currentCount + 1);
+        
+        console.log(`📱 [QR CODE] Regeneration count for ${sessionId}: ${currentCount + 1}/${MAX_QR_REGENERATIONS}`);
+        
+        // If QR code has been regenerated too many times, destroy the client
+        if (currentCount + 1 > MAX_QR_REGENERATIONS) {
+            console.error(`❌ [QR CODE] Session ${sessionId} exceeded max QR regenerations (${MAX_QR_REGENERATIONS}), destroying client to prevent memory leak`);
+            
+            try {
+                await client.destroy();
+            } catch (err) {
+                console.error(`❌ [QR CODE] Error destroying client ${sessionId}:`, err.message);
+            }
+            
+            clients.delete(sessionId);
+            qrCodes.delete(sessionId);
+            sessionStatuses.delete(sessionId);
+            qrRegenerationCount.delete(sessionId);
+            
+            await pool.execute(
+                `UPDATE sessions SET status = 'disconnected', qr_code = NULL WHERE session_id = ?`,
+                [sessionId]
+            );
+            
+            socketHandler.emitSessionStatus(sessionId, 'disconnected', { 
+                reason: 'QR code regeneration limit exceeded. Please restart the session.' 
+            });
+            
+            return;
+        }
+        
         qrCodes.set(sessionId, qr);
         sessionStatuses.set(sessionId, 'qr_generated');
 
@@ -3059,6 +3109,9 @@ function createClient(sessionId) {
     client.on('authenticated', async () => {
         console.log(`[${sessionId}] Authenticated`);
         sessionStatuses.set(sessionId, 'authenticated');
+        
+        // Reset QR regeneration counter on successful authentication
+        qrRegenerationCount.delete(sessionId);
 
         await pool.execute(
             `UPDATE sessions SET status = 'authenticated' WHERE session_id = ?`,
@@ -3148,6 +3201,7 @@ function createClient(sessionId) {
         console.log(`✅ [READY] Client is ready for session: ${sessionId}`);
         sessionStatuses.set(sessionId, 'ready');
         qrCodes.delete(sessionId);
+        qrRegenerationCount.delete(sessionId); // Reset counter on ready
 
         const info = client.info;
         await pool.execute(
@@ -3384,6 +3438,7 @@ function createClient(sessionId) {
         console.log(`🔌 [DISCONNECTED] Client disconnected for session ${sessionId}:`, reason);
         sessionStatuses.set(sessionId, 'disconnected');
         clients.delete(sessionId);
+        qrRegenerationCount.delete(sessionId); // Cleanup counter
 
         await pool.execute(
             `UPDATE sessions SET status = 'disconnected' WHERE session_id = ?`,
