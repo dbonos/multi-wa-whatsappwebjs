@@ -40,6 +40,19 @@ Content-Type: application/json
 }
 ```
 
+### Request OTP (Login)
+```http
+POST /api/auth/request-otp
+Content-Type: application/json
+
+{
+  "sessionName": "628112298898"
+}
+```
+
+**Note:** OTP will be sent using the default sender session `DEFAULT_OTP_SESSION_ID`
+(defaults to `628112298898`).
+
 ### Get Current User
 ```http
 GET /api/auth/me
