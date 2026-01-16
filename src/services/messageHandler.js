@@ -987,19 +987,17 @@ class MessageHandler {
                 );
             }
 
-            // Save to deleted messages log
+            // Save to deleted messages log (only log basic info - detailed info is in messages table)
+            // Note: deleted_messages_log table only has: id, message_id, session_id, deleted_at, deleted_by
             await pool.execute(
                 `INSERT INTO deleted_messages_log 
-                (message_id, session_id, from_number, to_number, message_type, body_preview, deletion_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                (message_id, session_id, deleted_by)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE deleted_at = CURRENT_TIMESTAMP`,
                 [
                     messageId,
                     sessionId,
-                    messageInfo?.from_number || null,
-                    messageInfo?.to_number || null,
-                    messageInfo?.message_type || 'text',
-                    (messageInfo?.body || messageInfo?.caption || '').substring(0, 255),
-                    type
+                    type === 'retracted' ? 'everyone' : 'me'
                 ]
             );
 
