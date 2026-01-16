@@ -158,6 +158,8 @@ export const sessionsAPI = {
   
   getStatus: (sessionId) => api.get(`/sessions/${sessionId}/status`),
 
+  restart: (sessionId) => api.post(`/sessions/${sessionId}/restart`),
+
   updateDomain: (sessionId, publicDomain) =>
     api.put(`/sessions/${sessionId}/domain`, { publicDomain }),
   

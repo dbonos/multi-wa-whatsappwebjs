@@ -53,11 +53,17 @@ export default function SessionCard({ session, onDelete, onRefresh, isAdmin = fa
 
   const handleRefresh = async () => {
     try {
-      const response = await sessionsAPI.getStatus(session.session_id);
-      setStatus(response.data.status);
-      onRefresh?.(session.session_id);
+      // Restart the session
+      await sessionsAPI.restart(session.session_id);
+      // Update local status to show it's restarting
+      setStatus('initializing');
+      // Refresh the session list after a short delay
+      setTimeout(() => {
+        onRefresh?.();
+      }, 1000);
     } catch (error) {
-      console.error('Failed to refresh status:', error);
+      console.error('Failed to restart session:', error);
+      alert('Failed to restart session: ' + (error.response?.data?.error || error.message));
     }
   };
 
