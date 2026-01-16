@@ -1119,17 +1119,12 @@ const upload = multer({
 
 // Create a custom multer instance that always parses fields
 // Use .fields() to explicitly handle both fields and files
-const uploadWithFields = multer({
+// Use single() for attachment, text fields will be in req.body automatically
+const uploadSingleAttachment = multer({
     storage: storage,
     limits: { fileSize: 50 * 1024 * 1024 },
     preservePath: true
-}).fields([
-    { name: 'sessionId', maxCount: 1 },
-    { name: 'phone', maxCount: 1 },
-    { name: 'message', maxCount: 1 },
-    { name: 'caption', maxCount: 1 },
-    { name: 'attachment', maxCount: 1 }
-]);
+}).single('attachment');
 
 // Also keep the original upload.any() as fallback
 
@@ -1153,26 +1148,12 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
     
     if (contentType.includes('multipart/form-data')) {
         console.log(`📦 [MULTER] Detected multipart/form-data, using multer...`);
-        // Use .fields() to explicitly parse both fields and files
-        uploadWithFields(req, res, (err) => {
+        // Use .single() for attachment, text fields will be in req.body
+        uploadSingleAttachment(req, res, (err) => {
             if (err) {
                 console.error(`❌ [MULTER ERROR]:`, err);
                 console.error(`❌ [MULTER ERROR] Stack:`, err.stack);
                 return res.status(400).json({ error: 'File upload error: ' + err.message });
-                    }
-            
-            // Handle files from req.files (multer.fields() returns object with field names as keys)
-            if (req.files && typeof req.files === 'object') {
-                // Convert files object to array for easier handling
-                const filesArray = [];
-                Object.keys(req.files).forEach(fieldname => {
-                    if (Array.isArray(req.files[fieldname])) {
-                        filesArray.push(...req.files[fieldname]);
-                    } else {
-                        filesArray.push(req.files[fieldname]);
-                    }
-                });
-                req.files = filesArray;
             }
             
             // Log parsed data
@@ -1183,8 +1164,8 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 phone: req.body?.phone,
                 message: req.body?.message,
                 caption: req.body?.caption,
-                filesCount: req.files ? (Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length) : 0,
-                files: req.files ? (Array.isArray(req.files) ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'not array') : 'no files'
+                hasFile: !!req.file,
+                file: req.file ? { fieldname: req.file.fieldname, originalname: req.file.originalname, size: req.file.size } : null
             });
             
             // Verify required fields are present
@@ -1202,7 +1183,6 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         });
     } else {
         // For JSON requests, body should already be parsed by express.json()
-        // But let's verify it's there
         console.log(`✅ [MIDDLEWARE] Using JSON parser (not multipart)`);
         console.log(`✅ [MIDDLEWARE] Body keys:`, Object.keys(req.body || {}));
         console.log(`✅ [MIDDLEWARE] Body content:`, req.body);
@@ -1218,28 +1198,8 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         const message = req.body?.message?.trim();
         const caption = req.body?.caption?.trim() || null; // Explicitly handle caption
         
-        // Handle files - multer.fields() returns object, multer.any() returns array
-        let file = null;
-        if (req.files) {
-            if (Array.isArray(req.files)) {
-                // From multer.any() - array of files
-            file = req.files.find(f => f.fieldname === 'attachment') || req.files[0];
-            } else if (typeof req.files === 'object') {
-                // From multer.fields() - object with field names as keys
-                if (req.files.attachment && Array.isArray(req.files.attachment) && req.files.attachment.length > 0) {
-                    file = req.files.attachment[0];
-                } else {
-                    // Find first file in any field
-                    const fileFields = Object.keys(req.files);
-                    for (const fieldName of fileFields) {
-                        if (Array.isArray(req.files[fieldName]) && req.files[fieldName].length > 0) {
-                            file = req.files[fieldName][0];
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        // Handle file - multer.single() returns file in req.file
+        const file = req.file || null;
 
         console.log(`📤 [SEND MESSAGE] ==========================================`);
         console.log(`📤 [SEND MESSAGE] Request received:`);
