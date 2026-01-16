@@ -1229,6 +1229,7 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
         // Save message to database FIRST (before attachment to satisfy foreign key constraint)
         // We store created_at/updated_at as WIB wall-clock time (DATETIME after migration).
         const attachmentUrl = file ? buildAttachmentUrl(file.path) : null;
+        // Count: session_id(1), message_id(2), from_number(3), to_number(4), contact_id(5), message_type(6), body(7), caption(8), timestamp(9), attachment_path(10), attachment_url(11) = 11 params
         const [result] = await pool.execute(
             `INSERT INTO messages 
              (session_id, message_id, from_number, to_number, contact_id, direction, fromAI, message_type, body, caption, status, timestamp, attachment_path, attachment_url, created_at, updated_at)
@@ -1239,14 +1240,14 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
                 null, // from_number for outgoing
                 phone,
                 chatId,
-                file ? file.mimetype.split('/')[0] : 'text',
+                file ? file.mimetype.split('/')[0] : 'text', // message_type
                 // For attachment: use caption if exists, otherwise message. For text: use message
-                file ? (caption || message || '') : (message || ''),
+                file ? (caption || message || '') : (message || ''), // body
                 // Caption field: only set if there's attachment and caption exists
-                file ? (caption || message || null) : null,
-                getWIBTimestamp(),
-                file ? file.path : null,
-                attachmentUrl
+                file ? (caption || message || null) : null, // caption
+                getWIBTimestamp(), // timestamp
+                file ? file.path : null, // attachment_path
+                attachmentUrl // attachment_url
             ]
         );
 

@@ -33,26 +33,42 @@ class ActivityLogger {
         metadata = null
     }) {
         try {
+            // Validate required fields
+            if (!userId || !action) {
+                console.error('❌ [ACTIVITY LOGGER] Missing required fields: userId or action');
+                return;
+            }
+
+            // Ensure all values are properly formatted (no undefined)
+            const params = [
+                parseInt(userId) || null,
+                username || null,
+                sessionId || null,
+                action || null,
+                resourceType || null,
+                resourceId ? String(resourceId) : null,
+                description || null,
+                ipAddress || null,
+                userAgent || null,
+                metadata ? JSON.stringify(metadata) : null
+            ];
+
             await pool.execute(
                 `INSERT INTO activity_logs 
                 (user_id, username, session_id, action, resource_type, resource_id, description, ip_address, user_agent, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    userId,
-                    username,
-                    sessionId,
-                    action,
-                    resourceType,
-                    resourceId,
-                    description,
-                    ipAddress,
-                    userAgent,
-                    metadata ? JSON.stringify(metadata) : null
-                ]
+                params
             );
         } catch (error) {
             // Don't throw - logging failures shouldn't break the app
             console.error('❌ [ACTIVITY LOGGER] Failed to log activity:', error.message);
+            console.error('❌ [ACTIVITY LOGGER] Error details:', {
+                userId,
+                username,
+                action,
+                error: error.message,
+                stack: error.stack
+            });
         }
     }
 
@@ -90,38 +106,45 @@ class ActivityLogger {
             `;
             const params = [];
 
+            // Validate and add filters
             if (userId) {
-                query += ' AND al.user_id = ?';
-                params.push(userId);
+                const userIdInt = parseInt(userId);
+                if (!isNaN(userIdInt)) {
+                    query += ' AND al.user_id = ?';
+                    params.push(userIdInt);
+                }
             }
 
             if (sessionId) {
                 query += ' AND al.session_id = ?';
-                params.push(sessionId);
+                params.push(String(sessionId));
             }
 
             if (action) {
                 query += ' AND al.action = ?';
-                params.push(action);
+                params.push(String(action));
             }
 
             if (resourceType) {
                 query += ' AND al.resource_type = ?';
-                params.push(resourceType);
+                params.push(String(resourceType));
             }
 
             if (startDate) {
                 query += ' AND al.created_at >= ?';
-                params.push(startDate);
+                params.push(String(startDate));
             }
 
             if (endDate) {
                 query += ' AND al.created_at <= ?';
-                params.push(endDate);
+                params.push(String(endDate));
             }
 
-            query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?';
-            params.push(limit, offset);
+            // LIMIT and OFFSET must be integers, not parameters
+            // MySQL doesn't support LIMIT/OFFSET as prepared statement parameters in some versions
+            const limitInt = Math.max(1, Math.min(1000, parseInt(limit) || 100));
+            const offsetInt = Math.max(0, parseInt(offset) || 0);
+            query += ` ORDER BY al.created_at DESC LIMIT ${limitInt} OFFSET ${offsetInt}`;
 
             const [logs] = await pool.execute(query, params);
 
@@ -151,34 +174,38 @@ class ActivityLogger {
             let query = 'SELECT COUNT(*) as count FROM activity_logs WHERE 1=1';
             const params = [];
 
+            // Validate and add filters
             if (userId) {
-                query += ' AND user_id = ?';
-                params.push(userId);
+                const userIdInt = parseInt(userId);
+                if (!isNaN(userIdInt)) {
+                    query += ' AND user_id = ?';
+                    params.push(userIdInt);
+                }
             }
 
             if (sessionId) {
                 query += ' AND session_id = ?';
-                params.push(sessionId);
+                params.push(String(sessionId));
             }
 
             if (action) {
                 query += ' AND action = ?';
-                params.push(action);
+                params.push(String(action));
             }
 
             if (resourceType) {
                 query += ' AND resource_type = ?';
-                params.push(resourceType);
+                params.push(String(resourceType));
             }
 
             if (startDate) {
                 query += ' AND created_at >= ?';
-                params.push(startDate);
+                params.push(String(startDate));
             }
 
             if (endDate) {
                 query += ' AND created_at <= ?';
-                params.push(endDate);
+                params.push(String(endDate));
             }
 
             const [result] = await pool.execute(query, params);
