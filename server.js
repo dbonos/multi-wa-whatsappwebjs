@@ -3554,14 +3554,31 @@ function createClient(sessionId) {
         socketHandler.emitSessionStatus(sessionId, 'disconnected', { reason });
         
         // Cleanup Chrome processes for this session after a delay
-        // (give time for graceful shutdown)
+        // (give time for graceful shutdown and potential re-initialization)
         setTimeout(async () => {
             try {
+                // Check if session was re-initialized (client exists again)
+                if (clients.has(sessionId)) {
+                    console.log(`ℹ️ [DISCONNECTED] Session ${sessionId} was re-initialized, skipping cleanup`);
+                    return;
+                }
+                
+                // Check if session status is not disconnected (might be initializing/qr_generated)
+                const [sessions] = await pool.execute(
+                    'SELECT status FROM sessions WHERE session_id = ?',
+                    [sessionId]
+                );
+                
+                if (sessions.length > 0 && sessions[0].status !== 'disconnected') {
+                    console.log(`ℹ️ [DISCONNECTED] Session ${sessionId} status is ${sessions[0].status}, skipping cleanup`);
+                    return;
+                }
+                
                 await healthMonitor.cleanupSessionProcesses(sessionId, clients);
             } catch (error) {
                 console.error(`❌ [DISCONNECTED] Error cleaning up session ${sessionId}:`, error.message);
             }
-        }, 30000); // Wait 30 seconds before cleanup
+        }, 60000); // Wait 60 seconds before cleanup (increased from 30s)
     });
 
     return client;
