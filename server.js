@@ -233,8 +233,8 @@ app.post('/api/auth/login', async (req, res) => {
                 const token = generateToken(user.id);
                 console.log('✅ [LOGIN] User login successful (password):', sessionName);
 
-                // Log user login
-                await activityLogger.log({
+                // Log user login (non-blocking)
+                activityLogger.log({
                     userId: user.id,
                     username: user.username || user.session_id,
                     sessionId: user.session_id,
@@ -242,6 +242,8 @@ app.post('/api/auth/login', async (req, res) => {
                     description: `User login with password (session: ${user.session_id})`,
                     ipAddress: req.ip || req.connection.remoteAddress,
                     userAgent: req.get('user-agent')
+                }).catch(err => {
+                    console.error('⚠️ [LOGIN] Failed to log activity (non-critical):', err.message);
                 });
 
                 return res.json({
