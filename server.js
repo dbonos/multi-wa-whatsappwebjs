@@ -162,18 +162,21 @@ app.post('/api/auth/login', async (req, res) => {
 
             const token = generateToken(user.id);
             console.log('✅ [LOGIN] Admin login successful:', username);
+            console.log('✅ [LOGIN] Token generated, length:', token.length);
 
-            // Log admin login
-            await activityLogger.log({
+            // Log admin login (non-blocking)
+            activityLogger.log({
                 userId: user.id,
                 username: user.username,
                 action: 'login',
                 description: 'Admin login',
                 ipAddress: req.ip || req.connection.remoteAddress,
                 userAgent: req.get('user-agent')
+            }).catch(err => {
+                console.error('⚠️ [LOGIN] Failed to log activity (non-critical):', err.message);
             });
 
-            return res.json({
+            const response = {
                 success: true,
                 token,
                 user: {
@@ -181,7 +184,10 @@ app.post('/api/auth/login', async (req, res) => {
                     username: user.username,
                     role: user.role
                 }
-            });
+            };
+            
+            console.log('✅ [LOGIN] Sending response for admin:', { success: response.success, userId: response.user.id, hasToken: !!response.token });
+            return res.json(response);
         }
 
         // User login: session name (phone number) + password or OTP
