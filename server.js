@@ -281,9 +281,10 @@ app.post('/api/auth/login', async (req, res) => {
 
                 const token = generateToken(user.id);
                 console.log('✅ [LOGIN] User login successful (OTP):', sessionName);
+                console.log('✅ [LOGIN] Token generated, length:', token.length);
 
-                // Log user login with OTP
-                await activityLogger.log({
+                // Log user login with OTP (non-blocking)
+                activityLogger.log({
                     userId: user.id,
                     username: user.username || user.session_id,
                     sessionId: user.session_id,
@@ -291,9 +292,11 @@ app.post('/api/auth/login', async (req, res) => {
                     description: `User login with OTP (session: ${user.session_id})`,
                     ipAddress: req.ip || req.connection.remoteAddress,
                     userAgent: req.get('user-agent')
+                }).catch(err => {
+                    console.error('⚠️ [LOGIN] Failed to log activity (non-critical):', err.message);
                 });
 
-                return res.json({
+                const response = {
                     success: true,
                     token,
                     user: {
@@ -303,7 +306,10 @@ app.post('/api/auth/login', async (req, res) => {
                         phone_number: user.phone_number,
                         role: user.role
                     }
-                });
+                };
+                
+                console.log('✅ [LOGIN] Sending response for user (OTP):', { success: response.success, userId: response.user.id, sessionId: response.user.session_id, hasToken: !!response.token });
+                return res.json(response);
             }
 
             return res.status(400).json({ error: 'Password or OTP required' });
