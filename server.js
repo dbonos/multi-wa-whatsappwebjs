@@ -3333,14 +3333,44 @@ async function initializeExistingSessions() {
                 // Create client instance
                 const client = createClient(session_id);
                 clients.set(session_id, client);
-                sessionStatuses.set(session_id, 'initializing');
+                
+                // Set initial status based on DB status
+                if (status === 'ready') {
+                    sessionStatuses.set(session_id, 'initializing'); // Will be set to ready when client.info is available
+                } else {
+                    sessionStatuses.set(session_id, 'initializing');
+                }
 
                 // Initialize client (will auto-login if session file exists)
                 // Add delay to avoid multiple simultaneous initializations
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 
-                client.initialize().then(() => {
+                client.initialize().then(async () => {
                     console.log(`✅ [AUTO-INIT] Client initialization started for: ${session_id}`);
+                    
+                    // If status was ready in DB, wait a bit and check if client.info is available
+                    if (status === 'ready') {
+                        setTimeout(async () => {
+                            if (client.info && client.info.wid) {
+                                console.log(`✅ [AUTO-INIT] Session ${session_id} restored to ready state`);
+                                sessionStatuses.set(session_id, 'ready');
+                                await pool.execute(
+                                    `UPDATE sessions 
+                                     SET status = 'ready', 
+                                         phone_number = ?,
+                                         display_name = ?,
+                                         last_activity = CURRENT_TIMESTAMP
+                                     WHERE session_id = ?`,
+                                    [
+                                        client.info.wid?.user || null,
+                                        client.info.pushname || null,
+                                        session_id
+                                    ]
+                                );
+                                socketHandler.emitSessionStatus(session_id, 'ready', { info: client.info });
+                            }
+                        }, 5000); // Wait 5 seconds for client to fully initialize
+                    }
                 }).catch(err => {
                     console.error(`❌ [AUTO-INIT] Error initializing session ${session_id}:`, err.message);
                     // Clean up failed client
