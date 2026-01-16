@@ -3243,8 +3243,10 @@ async function initializeExistingSessions() {
     try {
         console.log('🔄 [AUTO-INIT] Checking for existing sessions to initialize...');
         // Initialize sessions that have been authenticated before (not stopped/disconnected)
+        // Also check updated_at to see if authenticated session is stuck
         const [sessions] = await pool.execute(
-            `SELECT session_id, status FROM sessions 
+            `SELECT session_id, status, updated_at, TIMESTAMPDIFF(SECOND, updated_at, NOW()) as seconds_since_update
+             FROM sessions 
              WHERE status IN ('ready', 'authenticated', 'initializing', 'qr_generated')
              AND status != 'stopped'
              ORDER BY updated_at DESC`
@@ -3258,7 +3260,20 @@ async function initializeExistingSessions() {
         console.log(`📋 [AUTO-INIT] Found ${sessions.length} session(s) to initialize`);
 
         for (const session of sessions) {
-            const { session_id, status } = session;
+            const { session_id, status, seconds_since_update } = session;
+            
+            // If session has been authenticated for more than 30 seconds, mark it as ready in DB
+            // This handles cases where ready event never fired but session is actually ready
+            if (status === 'authenticated' && seconds_since_update > 30) {
+                console.log(`⚠️  [AUTO-INIT] Session ${session_id} has been authenticated for ${seconds_since_update} seconds, marking as ready`);
+                await pool.execute(
+                    `UPDATE sessions 
+                     SET status = 'ready', 
+                         last_activity = CURRENT_TIMESTAMP
+                     WHERE session_id = ?`,
+                    [session_id]
+                );
+            }
             
             // Check if client already exists and is ready
             if (clients.has(session_id)) {
