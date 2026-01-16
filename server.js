@@ -2978,12 +2978,20 @@ function createClient(sessionId) {
         socketHandler.emitSessionStatus(sessionId, 'authenticated');
 
         // Fallback: Check periodically if client.info is available and auto-set to ready
-        // Check every 5 seconds for up to 30 seconds
+        // Check every 5 seconds for up to 60 seconds
         let checkCount = 0;
-        const maxChecks = 6; // 6 checks x 5 seconds = 30 seconds max
+        const maxChecks = 12; // 12 checks x 5 seconds = 60 seconds max
         const checkInterval = setInterval(async () => {
             checkCount++;
             const currentStatus = sessionStatuses.get(sessionId);
+            const currentClient = clients.get(sessionId);
+            
+            // If client was destroyed, stop checking
+            if (!currentClient) {
+                console.log(`⚠️  [AUTHENTICATED FALLBACK] Client for ${sessionId} was destroyed during check`);
+                clearInterval(checkInterval);
+                return;
+            }
             
             // If already ready, stop checking
             if (currentStatus === 'ready') {
@@ -2992,7 +3000,7 @@ function createClient(sessionId) {
             }
             
             // Check if client.info is available
-            if (client.info && client.info.wid) {
+            if (currentClient.info && currentClient.info.wid) {
                 console.log(`✅ [AUTHENTICATED FALLBACK] Auto-setting session ${sessionId} to ready (client.info available after ${checkCount * 5} seconds)`);
                 clearInterval(checkInterval);
                 sessionStatuses.set(sessionId, 'ready');
@@ -3007,16 +3015,39 @@ function createClient(sessionId) {
                          last_activity = CURRENT_TIMESTAMP
                      WHERE session_id = ?`,
                     [
-                        client.info.wid?.user || null,
-                        client.info.pushname || null,
+                        currentClient.info.wid?.user || null,
+                        currentClient.info.pushname || null,
                         sessionId
                     ]
                 );
                 
-                socketHandler.emitSessionStatus(sessionId, 'ready', { info: client.info });
+                socketHandler.emitSessionStatus(sessionId, 'ready', { info: currentClient.info });
             } else if (checkCount >= maxChecks) {
-                // After 30 seconds, if still no info, stop checking
-                console.log(`⚠️  [AUTHENTICATED FALLBACK] Session ${sessionId} still authenticated after 30 seconds, but client.info not available`);
+                // After 60 seconds, if still no info, mark as ready anyway if we have phone_number from DB
+                console.log(`⚠️  [AUTHENTICATED FALLBACK] Session ${sessionId} still authenticated after 60 seconds, but client.info not available`);
+                
+                // Try to get phone_number from database
+                const [dbSessions] = await pool.execute(
+                    'SELECT phone_number, display_name FROM sessions WHERE session_id = ?',
+                    [sessionId]
+                );
+                
+                if (dbSessions.length > 0 && dbSessions[0].phone_number) {
+                    console.log(`✅ [AUTHENTICATED FALLBACK] Marking session ${sessionId} as ready based on DB data (phone: ${dbSessions[0].phone_number})`);
+                    sessionStatuses.set(sessionId, 'ready');
+                    qrCodes.delete(sessionId);
+                    
+                    await pool.execute(
+                        `UPDATE sessions 
+                         SET status = 'ready', 
+                             last_activity = CURRENT_TIMESTAMP
+                         WHERE session_id = ?`,
+                        [sessionId]
+                    );
+                    
+                    socketHandler.emitSessionStatus(sessionId, 'ready');
+                }
+                
                 clearInterval(checkInterval);
             }
         }, 5000); // Check every 5 seconds
