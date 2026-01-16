@@ -153,7 +153,16 @@ app.post('/api/auth/login', async (req, res) => {
             }
 
             const user = users[0];
-            const validPassword = await bcrypt.compare(password, user.password_hash);
+            console.log('🔐 [LOGIN] Admin user found, verifying password...');
+            let validPassword = false;
+            try {
+                validPassword = await bcrypt.compare(password, user.password_hash);
+                console.log('🔐 [LOGIN] Password verification result:', validPassword);
+            } catch (bcryptError) {
+                console.error('❌ [LOGIN] Error comparing password:', bcryptError);
+                console.error('❌ [LOGIN] Bcrypt error stack:', bcryptError.stack);
+                return res.status(500).json({ error: 'Password verification failed' });
+            }
 
             if (!validPassword) {
                 console.error('❌ [LOGIN] Invalid password for admin:', username);
