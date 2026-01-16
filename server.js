@@ -2454,9 +2454,17 @@ app.post('/api/skip-messages', authenticate, async (req, res) => {
             }
         });
         
-        // Invalidate skip groups cache for this session
-        skipGroupsCache.delete(sessionId);
-        console.log(`🗑️ [SKIP GROUPS CACHE] Invalidated cache for ${sessionId} after adding skip rule`);
+        // Update cache instead of invalidating - remove the added group from available list
+        const cached = skipGroupsCache.get(sessionId);
+        if (cached && type === 'group' && groupId) {
+            cached.groups = cached.groups.filter(g => g.group_id !== groupId);
+            skipGroupsCache.set(sessionId, cached);
+            console.log(`♻️ [SKIP GROUPS CACHE] Updated cache for ${sessionId} - removed group ${groupId}`);
+        } else {
+            // If no cache or not a group, invalidate
+            skipGroupsCache.delete(sessionId);
+            console.log(`🗑️ [SKIP GROUPS CACHE] Invalidated cache for ${sessionId} after adding skip rule`);
+        }
         
         res.json({
             success: true,
@@ -2576,7 +2584,7 @@ app.delete('/api/skip-messages/:id', authenticate, async (req, res) => {
             }
         });
         
-        // Invalidate skip groups cache for this session
+        // For delete, always invalidate cache (simpler than trying to re-add)
         skipGroupsCache.delete(skipRule.session_id);
         console.log(`🗑️ [SKIP GROUPS CACHE] Invalidated cache for ${skipRule.session_id} after deleting skip rule`);
         
