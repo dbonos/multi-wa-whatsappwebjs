@@ -795,10 +795,10 @@ app.get('/api/auth/menu-permissions', authenticate, async (req, res) => {
             [userId]
         );
         
-        // Convert to object for easier lookup
+        // Convert to object for easier lookup (normalize to boolean)
         const permissionsMap = {};
         permissions.forEach(p => {
-            permissionsMap[p.menu_path] = p.is_visible;
+            permissionsMap[p.menu_path] = !!p.is_visible;
         });
 
         res.json({ success: true, permissions: permissionsMap });

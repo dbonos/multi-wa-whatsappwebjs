@@ -76,8 +76,8 @@ export default function Layout({ children }) {
     // Check menu permissions (if permission exists and is false, hide it)
     // If permission doesn't exist, default to visible (backward compatibility)
     const menuKey = item.path.replace('/', '');
-    if (menuPermissions.hasOwnProperty(menuKey)) {
-      return menuPermissions[menuKey] !== false;
+    if (Object.prototype.hasOwnProperty.call(menuPermissions, menuKey)) {
+      return Boolean(menuPermissions[menuKey]);
     }
     
     // Default: visible if no permission set
