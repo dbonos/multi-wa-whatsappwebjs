@@ -130,15 +130,25 @@ app.use('/attachments', express.static(process.env.ATTACHMENTS_DIR || './attachm
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, sessionName, password, otp, loginMethod } = req.body;
+        
+        console.log('🔐 [LOGIN] Login attempt:', {
+            hasUsername: !!username,
+            hasSessionName: !!sessionName,
+            hasPassword: !!password,
+            hasOtp: !!otp,
+            loginMethod: loginMethod || 'password'
+        });
 
         // Admin login: username + password
         if (username && password && !sessionName) {
+            console.log('🔐 [LOGIN] Admin login attempt for:', username);
             const [users] = await pool.execute(
                 'SELECT * FROM users WHERE username = ? AND role = ?',
                 [username, 'admin']
             );
 
             if (users.length === 0) {
+                console.error('❌ [LOGIN] Admin user not found:', username);
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
 
@@ -146,10 +156,12 @@ app.post('/api/auth/login', async (req, res) => {
             const validPassword = await bcrypt.compare(password, user.password_hash);
 
             if (!validPassword) {
+                console.error('❌ [LOGIN] Invalid password for admin:', username);
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
 
             const token = generateToken(user.id);
+            console.log('✅ [LOGIN] Admin login successful:', username);
 
             // Log admin login
             await activityLogger.log({
@@ -210,13 +222,27 @@ app.post('/api/auth/login', async (req, res) => {
 
             // Login with password
             if (password && loginMethod !== 'otp') {
+                console.log('🔐 [LOGIN] Verifying password for user:', user.id);
                 const validPassword = await bcrypt.compare(password, user.password_hash);
 
                 if (!validPassword) {
+                    console.error('❌ [LOGIN] Invalid password for user:', user.id);
                     return res.status(401).json({ error: 'Invalid password' });
                 }
 
                 const token = generateToken(user.id);
+                console.log('✅ [LOGIN] User login successful (password):', sessionName);
+
+                // Log user login
+                await activityLogger.log({
+                    userId: user.id,
+                    username: user.username || user.session_id,
+                    sessionId: user.session_id,
+                    action: 'login',
+                    description: `User login with password (session: ${user.session_id})`,
+                    ipAddress: req.ip || req.connection.remoteAddress,
+                    userAgent: req.get('user-agent')
+                });
 
                 return res.json({
                     success: true,
@@ -233,13 +259,16 @@ app.post('/api/auth/login', async (req, res) => {
 
             // Login with OTP
             if (otp && loginMethod === 'otp') {
+                console.log('🔐 [LOGIN] Verifying OTP for session:', sessionName);
                 const otpResult = await otpService.verifyOTP(sessionName, otp);
 
                 if (!otpResult.success) {
+                    console.error('❌ [LOGIN] Invalid OTP for session:', sessionName, otpResult.error);
                     return res.status(401).json({ error: otpResult.error || 'Invalid OTP' });
                 }
 
                 const token = generateToken(user.id);
+                console.log('✅ [LOGIN] User login successful (OTP):', sessionName);
 
                 // Log user login with OTP
                 await activityLogger.log({
@@ -270,8 +299,10 @@ app.post('/api/auth/login', async (req, res) => {
 
         return res.status(400).json({ error: 'Invalid login parameters' });
     } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Login failed' });
+        console.error('❌ [LOGIN] Login error:', error);
+        console.error('❌ [LOGIN] Error stack:', error.stack);
+        console.error('❌ [LOGIN] Request body:', req.body);
+        res.status(500).json({ error: 'Login failed: ' + error.message });
     }
 });
 
