@@ -3319,15 +3319,16 @@ async function initializeExistingSessions() {
                 continue;
             }
             
-            // Check if client already exists and is ready
+            // Check if client already exists
             if (clients.has(session_id)) {
                 const existingClient = clients.get(session_id);
                 const existingStatus = sessionStatuses.get(session_id);
-                if (existingStatus === 'ready' || (existingStatus === 'authenticated' && existingClient.info)) {
-                    console.log(`⏭️  [AUTO-INIT] Session ${session_id} already initialized (status: ${existingStatus}), skipping...`);
-                    // If authenticated with info, auto-set to ready
-                    if (existingStatus === 'authenticated' && existingClient.info) {
-                        console.log(`✅ [AUTO-INIT] Auto-setting authenticated session ${session_id} to ready`);
+                
+                // If client exists and has info, it's ready
+                if (existingClient.info && existingClient.info.wid) {
+                    console.log(`✅ [AUTO-INIT] Session ${session_id} already has active client with info, skipping reinitialize`);
+                    // Ensure status is set to ready
+                    if (existingStatus !== 'ready') {
                         sessionStatuses.set(session_id, 'ready');
                         await pool.execute(
                             `UPDATE sessions 
@@ -3345,6 +3346,56 @@ async function initializeExistingSessions() {
                         );
                         socketHandler.emitSessionStatus(session_id, 'ready', { info: existingClient.info });
                     }
+                    continue;
+                }
+                
+                // If status is ready but client.info not available yet, wait a bit
+                if (existingStatus === 'ready' || status === 'ready') {
+                    console.log(`⏳ [AUTO-INIT] Session ${session_id} marked as ready but client.info not available yet, waiting...`);
+                    // Wait 3 seconds and check again
+                    setTimeout(async () => {
+                        if (existingClient.info && existingClient.info.wid) {
+                            console.log(`✅ [AUTO-INIT] Session ${session_id} client.info now available`);
+                            sessionStatuses.set(session_id, 'ready');
+                            await pool.execute(
+                                `UPDATE sessions 
+                                 SET status = 'ready', 
+                                     phone_number = ?,
+                                     display_name = ?,
+                                     connected_at = COALESCE(connected_at, CURRENT_TIMESTAMP),
+                                     last_activity = CURRENT_TIMESTAMP
+                                 WHERE session_id = ?`,
+                                [
+                                    existingClient.info.wid?.user || null,
+                                    existingClient.info.pushname || null,
+                                    session_id
+                                ]
+                            );
+                            socketHandler.emitSessionStatus(session_id, 'ready', { info: existingClient.info });
+                        }
+                    }, 3000);
+                    continue; // Skip reinitialize, let it wait
+                }
+                
+                // If authenticated with info, auto-set to ready
+                if (existingStatus === 'authenticated' && existingClient.info) {
+                    console.log(`✅ [AUTO-INIT] Auto-setting authenticated session ${session_id} to ready`);
+                    sessionStatuses.set(session_id, 'ready');
+                    await pool.execute(
+                        `UPDATE sessions 
+                         SET status = 'ready', 
+                             phone_number = ?,
+                             display_name = ?,
+                             connected_at = COALESCE(connected_at, CURRENT_TIMESTAMP),
+                             last_activity = CURRENT_TIMESTAMP
+                         WHERE session_id = ?`,
+                        [
+                            existingClient.info.wid?.user || null,
+                            existingClient.info.pushname || null,
+                            session_id
+                        ]
+                    );
+                    socketHandler.emitSessionStatus(session_id, 'ready', { info: existingClient.info });
                     continue;
                 }
             }
