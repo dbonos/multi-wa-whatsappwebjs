@@ -232,6 +232,7 @@ app.post('/api/auth/login', async (req, res) => {
 
                 const token = generateToken(user.id);
                 console.log('✅ [LOGIN] User login successful (password):', sessionName);
+                console.log('✅ [LOGIN] Token generated, length:', token.length);
 
                 // Log user login (non-blocking)
                 activityLogger.log({
@@ -246,7 +247,7 @@ app.post('/api/auth/login', async (req, res) => {
                     console.error('⚠️ [LOGIN] Failed to log activity (non-critical):', err.message);
                 });
 
-                return res.json({
+                const response = {
                     success: true,
                     token,
                     user: {
@@ -256,7 +257,10 @@ app.post('/api/auth/login', async (req, res) => {
                         phone_number: user.phone_number,
                         role: user.role
                     }
-                });
+                };
+                
+                console.log('✅ [LOGIN] Sending response for user:', { success: response.success, userId: response.user.id, sessionId: response.user.session_id, hasToken: !!response.token });
+                return res.json(response);
             }
 
             // Login with OTP
