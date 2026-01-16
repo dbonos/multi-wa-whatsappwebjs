@@ -2283,39 +2283,14 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             });
         }
         
-        // Check if client is ready - wait up to 5 seconds for client.info to be available (reduced from 10s)
-        if (!client.info) {
-            console.warn(`⚠️ [SKIP GROUPS] Client info not available for sessionId: ${targetSessionId}, waiting...`);
-            
-            // Wait for client.info with timeout
-            let waited = 0;
-            const maxWait = 5000; // 5 seconds (reduced from 10)
-            const checkInterval = 500; // Check every 500ms
-            
-            while (!client.info && waited < maxWait) {
-                await new Promise(resolve => setTimeout(resolve, checkInterval));
-                waited += checkInterval;
-                
-                // Check if client still exists (might have been destroyed)
-                if (!clients.has(targetSessionId)) {
-                    console.error(`❌ [SKIP GROUPS] Client was destroyed while waiting for info`);
-                    return res.status(404).json({ 
-                        error: 'Session client was disconnected. Please restart the session.',
-                        sessionId: targetSessionId,
-                        message: 'The WhatsApp client connection was lost. Please restart the session from the dashboard.'
-                    });
-                }
-            }
-            
-            if (!client.info) {
-                console.warn(`⚠️ [SKIP GROUPS] Client info still not available after ${waited}ms`);
-                return res.status(404).json({ 
-                    error: 'Session is not ready yet. Please wait for the session to be fully initialized or restart the session.',
-                    sessionId: targetSessionId,
-                    sessionStatus: sessionStatus || 'loading',
-                    message: 'The WhatsApp client is still initializing. Please wait a moment and try again, or restart the session if it takes too long.'
-                });
-            }
+        // Check if client.info is available (needed for fetching groups from WhatsApp client)
+        // If not available, we'll still return groups from database only
+        let clientInfoAvailable = !!client.info;
+        
+        if (!clientInfoAvailable) {
+            console.warn(`⚠️ [SKIP GROUPS] Client info not available for sessionId: ${targetSessionId}, will fetch from database only`);
+        } else {
+            console.log(`✅ [SKIP GROUPS] Client info available for sessionId: ${targetSessionId}`);
         }
         
         // Get groups from database (contacts that have messages)
@@ -2337,32 +2312,36 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
         
         console.log(`📋 [SKIP GROUPS] Found ${dbGroups.length} groups from database`);
         
-        // Also get groups directly from WhatsApp client
+        // Also get groups directly from WhatsApp client (only if client.info is available)
         let clientGroups = [];
-        try {
-            const chats = await client.getChats();
-            const groups = chats.filter(chat => chat.isGroup);
-            console.log(`📋 [SKIP GROUPS] Found ${groups.length} groups from WhatsApp client`);
-            
-            // Convert to same format and merge with database groups
-            for (const group of groups) {
-                const groupId = group.id._serialized;
-                // Check if already in dbGroups
-                const existingGroup = dbGroups.find(g => g.group_id === groupId);
-                if (!existingGroup) {
-                    // Add group from client that's not in database yet
-                    clientGroups.push({
-                        group_id: groupId,
-                        name: group.name || null,
-                        pushname: group.name || null,
-                        message_count: 0,
-                        last_message_time: null
-                    });
+        if (clientInfoAvailable) {
+            try {
+                const chats = await client.getChats();
+                const groups = chats.filter(chat => chat.isGroup);
+                console.log(`📋 [SKIP GROUPS] Found ${groups.length} groups from WhatsApp client`);
+                
+                // Convert to same format and merge with database groups
+                for (const group of groups) {
+                    const groupId = group.id._serialized;
+                    // Check if already in dbGroups
+                    const existingGroup = dbGroups.find(g => g.group_id === groupId);
+                    if (!existingGroup) {
+                        // Add group from client that's not in database yet
+                        clientGroups.push({
+                            group_id: groupId,
+                            name: group.name || null,
+                            pushname: group.name || null,
+                            message_count: 0,
+                            last_message_time: null
+                        });
+                    }
                 }
+            } catch (clientError) {
+                console.error(`⚠️ [SKIP GROUPS] Error getting groups from client:`, clientError.message);
+                // Continue with database groups only
             }
-        } catch (clientError) {
-            console.error(`⚠️ [SKIP GROUPS] Error getting groups from client:`, clientError.message);
-            // Continue with database groups only
+        } else {
+            console.log(`ℹ️ [SKIP GROUPS] Skipping WhatsApp client groups fetch (client.info not available), using database groups only`);
         }
         
         // Merge database groups and client groups
