@@ -24,6 +24,7 @@ const SocketHandler = require('./src/services/socketHandler');
 const otpService = require('./src/services/otpService');
 const statisticsService = require('./src/services/statisticsService');
 const SchedulerService = require('./src/services/schedulerService');
+const activityLogger = require('./src/services/activityLogger');
 const { getWIBTime, getWIBTimestamp, getWIBToday, formatWIBDisplay, toWIBISOString } = require('./src/utils/timezone');
 
 const app = express();
@@ -150,6 +151,16 @@ app.post('/api/auth/login', async (req, res) => {
 
             const token = generateToken(user.id);
 
+            // Log admin login
+            await activityLogger.log({
+                userId: user.id,
+                username: user.username,
+                action: 'login',
+                description: 'Admin login',
+                ipAddress: req.ip || req.connection.remoteAddress,
+                userAgent: req.get('user-agent')
+            });
+
             return res.json({
                 success: true,
                 token,
@@ -229,6 +240,17 @@ app.post('/api/auth/login', async (req, res) => {
                 }
 
                 const token = generateToken(user.id);
+
+                // Log user login with OTP
+                await activityLogger.log({
+                    userId: user.id,
+                    username: user.username || user.session_id,
+                    sessionId: user.session_id,
+                    action: 'login',
+                    description: `User login with OTP (session: ${user.session_id})`,
+                    ipAddress: req.ip || req.connection.remoteAddress,
+                    userAgent: req.get('user-agent')
+                });
 
                 return res.json({
                     success: true,
@@ -477,6 +499,19 @@ app.post('/api/sessions', authenticate, requireAdmin, async (req, res) => {
             console.error(`❌ [CREATE SESSION] Error stack:`, err.stack);
         });
 
+        // Log activity
+        await activityLogger.log({
+            userId: req.user.id,
+            username: req.user.username,
+            sessionId: sessionId,
+            action: 'create_session',
+            resourceType: 'session',
+            resourceId: sessionId,
+            description: `Created new WhatsApp session: ${sessionId}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('user-agent')
+        });
+
         res.json({
             success: true,
             message: `Session ${sessionId} initialized. QR code will be available shortly.`,
@@ -535,6 +570,22 @@ app.put('/api/sessions/:sessionId/domain', authenticate, requireAdmin, async (re
             `UPDATE sessions SET public_domain = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?`,
             [normalizedDomain || null, sessionId]
         );
+
+        // Log activity
+        await activityLogger.log({
+            userId: req.user.id,
+            username: req.user.username,
+            sessionId: sessionId,
+            action: 'update_session_domain',
+            resourceType: 'session',
+            resourceId: sessionId,
+            description: `Updated public domain for session ${sessionId} to ${normalizedDomain || 'null'}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('user-agent'),
+            metadata: {
+                publicDomain: normalizedDomain || null
+            }
+        });
 
         res.json({ success: true, public_domain: normalizedDomain || null });
     } catch (error) {
@@ -646,6 +697,20 @@ app.post('/api/sessions/:sessionId/restart', authenticate, async (req, res) => {
         });
 
         console.log(`✅ [RESTART SESSION] Session ${sessionId} restart initiated`);
+        
+        // Log activity
+        await activityLogger.log({
+            userId: req.user.id,
+            username: req.user.username || req.user.session_id,
+            sessionId: sessionId,
+            action: 'restart_session',
+            resourceType: 'session',
+            resourceId: sessionId,
+            description: `Restarted WhatsApp session: ${sessionId}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('user-agent')
+        });
+        
         res.json({ 
             success: true, 
             message: `Session ${sessionId} restart initiated. Status will update shortly.`,
@@ -692,6 +757,20 @@ app.delete('/api/sessions/:sessionId', authenticate, requireAdmin, async (req, r
         }
 
         console.log(`✅ [DELETE SESSION] Session ${sessionId} deleted successfully`);
+        
+        // Log activity
+        await activityLogger.log({
+            userId: req.user.id,
+            username: req.user.username,
+            sessionId: sessionId,
+            action: 'delete_session',
+            resourceType: 'session',
+            resourceId: sessionId,
+            description: `Deleted WhatsApp session: ${sessionId}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('user-agent')
+        });
+        
         res.json({ success: true, message: `Session ${sessionId} deleted successfully` });
     } catch (error) {
         console.error(`❌ [DELETE SESSION] Error deleting session ${req.params.sessionId}:`, error);
@@ -778,6 +857,22 @@ app.put('/api/users/:userId/menu-permissions', authenticate, requireAdmin, async
                 [values]
             );
         }
+
+        // Log activity
+        await activityLogger.log({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'update_menu_permissions',
+            resourceType: 'user',
+            resourceId: userId.toString(),
+            description: `Updated menu permissions for user ID ${userId}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('user-agent'),
+            metadata: {
+                targetUserId: userId,
+                permissionsCount: permissions.length
+            }
+        });
 
         res.json({ success: true, message: 'Menu permissions updated successfully' });
     } catch (error) {
@@ -1187,6 +1282,24 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
 
         // Emit via WebSocket
         socketHandler.emitMessageStatus(sentMessage.id._serialized, 'sent', sessionId);
+
+        // Log activity (don't log message content - already in messages table)
+        await activityLogger.log({
+            userId: req.user.id,
+            username: req.user.username || req.user.session_id,
+            sessionId: sessionId,
+            action: 'send_message',
+            resourceType: 'message',
+            resourceId: sentMessage.id._serialized,
+            description: `Sent ${file ? file.mimetype.split('/')[0] : 'text'} message to ${phone}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('user-agent'),
+            metadata: {
+                to: phone,
+                hasAttachment: !!file,
+                messageType: file ? file.mimetype.split('/')[0] : 'text'
+            }
+        });
 
         res.json({
             success: true,
@@ -1955,6 +2068,60 @@ app.get('/api/contacts/:contactId', authenticate, async (req, res) => {
 });
 
 // ============================================
+// ADMIN ACTIVITY LOGS ENDPOINTS
+// ============================================
+
+// Get activity logs (Admin only)
+app.get('/api/admin/activity-logs', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const {
+            userId,
+            sessionId,
+            action,
+            resourceType,
+            startDate,
+            endDate,
+            limit = 100,
+            offset = 0
+        } = req.query;
+
+        const logs = await activityLogger.getLogs({
+            userId: userId ? parseInt(userId) : null,
+            sessionId: sessionId || null,
+            action: action || null,
+            resourceType: resourceType || null,
+            startDate: startDate || null,
+            endDate: endDate || null,
+            limit: parseInt(limit) || 100,
+            offset: parseInt(offset) || 0
+        });
+
+        const totalCount = await activityLogger.getLogCount({
+            userId: userId ? parseInt(userId) : null,
+            sessionId: sessionId || null,
+            action: action || null,
+            resourceType: resourceType || null,
+            startDate: startDate || null,
+            endDate: endDate || null
+        });
+
+        res.json({
+            success: true,
+            logs,
+            pagination: {
+                total: totalCount,
+                limit: parseInt(limit) || 100,
+                offset: parseInt(offset) || 0,
+                hasMore: (parseInt(offset) || 0) + logs.length < totalCount
+            }
+        });
+    } catch (error) {
+        console.error('Error getting activity logs:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // SKIP MESSAGES ENDPOINTS
 // ============================================
 
@@ -2157,6 +2324,26 @@ app.post('/api/skip-messages', authenticate, async (req, res) => {
             [sessionId, type, groupId || null, contactId || null, phoneNumber || null, name || null, description || null, req.user.id]
         );
         
+        // Log activity
+        await activityLogger.log({
+            userId: req.user.id,
+            username: req.user.username || req.user.session_id,
+            sessionId: sessionId,
+            action: 'add_skip_rule',
+            resourceType: 'skip_rule',
+            resourceId: result.insertId.toString(),
+            description: `Added skip rule for ${type}: ${groupId || contactId || phoneNumber || name || 'N/A'}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('user-agent'),
+            metadata: {
+                type: type,
+                groupId: groupId || null,
+                contactId: contactId || null,
+                phoneNumber: phoneNumber || null,
+                name: name || null
+            }
+        });
+        
         res.json({
             success: true,
             skipRuleId: result.insertId,
@@ -2255,6 +2442,25 @@ app.delete('/api/skip-messages/:id', authenticate, async (req, res) => {
         }
         
         await pool.execute('DELETE FROM skip_messages WHERE id = ?', [id]);
+        
+        // Log activity
+        await activityLogger.log({
+            userId: req.user.id,
+            username: req.user.username || req.user.session_id,
+            sessionId: skipRule.session_id,
+            action: 'delete_skip_rule',
+            resourceType: 'skip_rule',
+            resourceId: id,
+            description: `Deleted skip rule for ${skipRule.type}: ${skipRule.group_id || skipRule.contact_id || skipRule.phone_number || skipRule.name || 'N/A'}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('user-agent'),
+            metadata: {
+                type: skipRule.type,
+                groupId: skipRule.group_id || null,
+                contactId: skipRule.contact_id || null,
+                phoneNumber: skipRule.phone_number || null
+            }
+        });
         
         res.json({ success: true, message: 'Skip rule deleted successfully' });
     } catch (error) {

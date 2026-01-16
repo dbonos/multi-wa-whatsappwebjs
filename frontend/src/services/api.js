@@ -301,6 +301,12 @@ export const statisticsAPI = {
 };
 
 // Menu Permissions API
+export const adminAPI = {
+  getActivityLogs: (params = {}) => {
+    return api.get('/admin/activity-logs', { params });
+  }
+};
+
 export const menuPermissionsAPI = {
   getMyPermissions: () => api.get('/auth/menu-permissions'),
   

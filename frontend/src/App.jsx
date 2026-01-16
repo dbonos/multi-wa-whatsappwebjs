@@ -14,6 +14,7 @@ import SkipMessages from './pages/SkipMessages';
 import Statistics from './pages/Statistics';
 import ChangePassword from './pages/ChangePassword';
 import AdminMenuPermissions from './pages/AdminMenuPermissions';
+import ActivityLogs from './pages/ActivityLogs';
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
@@ -110,6 +111,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <AdminMenuPermissions />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/activity-logs"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <ActivityLogs />
             </Layout>
           </ProtectedRoute>
         }

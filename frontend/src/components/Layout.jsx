@@ -17,6 +17,7 @@ import {
   Key,
   Ban,
   BarChart3,
+  FileText,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
@@ -64,6 +65,7 @@ export default function Layout({ children }) {
     { path: '/broadcast', icon: Radio, label: 'Broadcast', adminOnly: true },
     { path: '/status', icon: Image, label: 'Status & Stories', adminOnly: true },
     { path: '/admin/menu-permissions', icon: Settings, label: 'Menu Access', adminOnly: true },
+    { path: '/admin/activity-logs', icon: FileText, label: 'Activity Logs', adminOnly: true },
   ];
 
   // Filter menu items based on admin status and permissions
