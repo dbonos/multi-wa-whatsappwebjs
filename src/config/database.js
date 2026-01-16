@@ -62,9 +62,16 @@ pool.execute = async function(sql, params) {
         return result;
     } catch (error) {
         console.error(`❌ [DB] Error in execute wrapper:`, error.message);
+        console.error(`❌ [DB] SQL:`, sql?.substring(0, 200) || 'N/A');
+        console.error(`❌ [DB] Params:`, params);
         throw error;
     } finally {
-        connection.release();
+        // Always release connection, even if there's an error
+        try {
+            connection.release();
+        } catch (releaseError) {
+            console.error(`❌ [DB] Error releasing connection:`, releaseError.message);
+        }
     }
 };
 
@@ -76,8 +83,18 @@ pool.query = async function(sql, params) {
         await ensureFixedTimezone(connection);
         const result = await connection.query(sql, params);
         return result;
+    } catch (error) {
+        console.error(`❌ [DB] Error in query wrapper:`, error.message);
+        console.error(`❌ [DB] SQL:`, sql?.substring(0, 200) || 'N/A');
+        console.error(`❌ [DB] Params:`, params);
+        throw error;
     } finally {
-        connection.release();
+        // Always release connection, even if there's an error
+        try {
+            connection.release();
+        } catch (releaseError) {
+            console.error(`❌ [DB] Error releasing connection:`, releaseError.message);
+        }
     }
 };
 

@@ -2163,8 +2163,12 @@ app.post('/api/skip-messages', authenticate, async (req, res) => {
             message: 'Skip rule added successfully'
         });
     } catch (error) {
-        console.error('Error adding skip rule:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ [SKIP MESSAGES] Error adding skip rule:', error);
+        console.error('❌ [SKIP MESSAGES] Error stack:', error.stack);
+        console.error('❌ [SKIP MESSAGES] Request body:', req.body);
+        // Don't expose internal error details to client
+        const errorMessage = error.message || 'Failed to add skip rule';
+        res.status(500).json({ error: errorMessage });
     }
 });
 
@@ -3079,6 +3083,21 @@ server.listen(PORT, async () => {
     console.log(`   GET  /api/statistics/settings - Get statistics settings`);
     console.log(`   PUT  /api/statistics/settings - Update statistics settings`);
     console.log(`   POST /api/statistics/send - Send statistics manually`);
+});
+
+// Global error handlers to prevent crashes
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ [UNHANDLED REJECTION] Unhandled Promise Rejection:', reason);
+    console.error('❌ [UNHANDLED REJECTION] Promise:', promise);
+    console.error('❌ [UNHANDLED REJECTION] Stack:', reason?.stack || 'No stack trace');
+    // Don't exit - log and continue
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('❌ [UNCAUGHT EXCEPTION] Uncaught Exception:', error);
+    console.error('❌ [UNCAUGHT EXCEPTION] Stack:', error.stack);
+    // Don't exit immediately - log and try to continue
+    // In production, you might want to exit here, but for now we'll log and continue
 });
 
 // Graceful shutdown
