@@ -702,6 +702,76 @@ app.get('/api/sessions/:sessionId/status', authenticate, async (req, res) => {
 });
 
 // ============================================
+// MENU PERMISSIONS ENDPOINTS (Admin only)
+// ============================================
+
+// Get menu permissions for a user
+app.get('/api/users/:userId/menu-permissions', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const [permissions] = await pool.execute(
+            'SELECT menu_path, is_visible FROM user_menu_permissions WHERE user_id = ?',
+            [userId]
+        );
+        res.json({ success: true, permissions });
+    } catch (error) {
+        console.error('Error getting menu permissions:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update menu permissions for a user
+app.put('/api/users/:userId/menu-permissions', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { permissions } = req.body; // Array of { menu_path, is_visible }
+
+        if (!Array.isArray(permissions)) {
+            return res.status(400).json({ error: 'permissions must be an array' });
+        }
+
+        // Delete existing permissions for this user
+        await pool.execute('DELETE FROM user_menu_permissions WHERE user_id = ?', [userId]);
+
+        // Insert new permissions
+        if (permissions.length > 0) {
+            const values = permissions.map(p => [userId, p.menu_path, p.is_visible]);
+            await pool.query(
+                'INSERT INTO user_menu_permissions (user_id, menu_path, is_visible) VALUES ?',
+                [values]
+            );
+        }
+
+        res.json({ success: true, message: 'Menu permissions updated successfully' });
+    } catch (error) {
+        console.error('Error updating menu permissions:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get current user's menu permissions
+app.get('/api/auth/menu-permissions', authenticate, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const [permissions] = await pool.execute(
+            'SELECT menu_path, is_visible FROM user_menu_permissions WHERE user_id = ?',
+            [userId]
+        );
+        
+        // Convert to object for easier lookup
+        const permissionsMap = {};
+        permissions.forEach(p => {
+            permissionsMap[p.menu_path] = p.is_visible;
+        });
+
+        res.json({ success: true, permissions: permissionsMap });
+    } catch (error) {
+        console.error('Error getting menu permissions:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // MESSAGE ENDPOINTS
 // ============================================
 

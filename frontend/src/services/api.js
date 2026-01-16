@@ -295,5 +295,15 @@ export const statisticsAPI = {
   send: (sessionId, date) => api.post('/statistics/send', { sessionId, date }),
 };
 
+// Menu Permissions API
+export const menuPermissionsAPI = {
+  getMyPermissions: () => api.get('/auth/menu-permissions'),
+  
+  getUserPermissions: (userId) => api.get(`/users/${userId}/menu-permissions`),
+  
+  updateUserPermissions: (userId, permissions) =>
+    api.put(`/users/${userId}/menu-permissions`, { permissions }),
+};
+
 export default api;
 

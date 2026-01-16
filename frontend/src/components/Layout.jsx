@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { menuPermissionsAPI } from '../services/api';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -17,7 +18,7 @@ import {
   Ban,
   BarChart3,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 
 export default function Layout({ children }) {
@@ -26,14 +27,35 @@ export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [menuPermissions, setMenuPermissions] = useState({});
+
+  useEffect(() => {
+    // Fetch menu permissions for current user
+    const fetchPermissions = async () => {
+      try {
+        const response = await menuPermissionsAPI.getMyPermissions();
+        if (response.data.success) {
+          setMenuPermissions(response.data.permissions || {});
+        }
+      } catch (error) {
+        console.error('Failed to fetch menu permissions:', error);
+        // Default: all menus visible if fetch fails
+        setMenuPermissions({});
+      }
+    };
+
+    if (user) {
+      fetchPermissions();
+    }
+  }, [user]);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  // Admin can see all, User can only see their own session
-  const navItems = [
+  // All available menu items
+  const allNavItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false },
     { path: '/messages', icon: MessageSquare, label: 'Messages', adminOnly: false },
     { path: '/contacts', icon: User, label: 'Contacts', adminOnly: false },
@@ -41,7 +63,25 @@ export default function Layout({ children }) {
     { path: '/statistics', icon: BarChart3, label: 'Statistik', adminOnly: false },
     { path: '/broadcast', icon: Radio, label: 'Broadcast', adminOnly: true },
     { path: '/status', icon: Image, label: 'Status & Stories', adminOnly: true },
-  ].filter(item => isAdmin || !item.adminOnly);
+  ];
+
+  // Filter menu items based on admin status and permissions
+  const navItems = allNavItems.filter(item => {
+    // Admin can see all admin-only items
+    if (item.adminOnly && !isAdmin) {
+      return false;
+    }
+    
+    // Check menu permissions (if permission exists and is false, hide it)
+    // If permission doesn't exist, default to visible (backward compatibility)
+    const menuKey = item.path.replace('/', '');
+    if (menuPermissions.hasOwnProperty(menuKey)) {
+      return menuPermissions[menuKey] !== false;
+    }
+    
+    // Default: visible if no permission set
+    return true;
+  });
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-b from-emerald-50 via-white to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-900">
