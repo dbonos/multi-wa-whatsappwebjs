@@ -39,6 +39,8 @@ const DEFAULT_OTP_SESSION_ID = process.env.DEFAULT_OTP_SESSION_ID || '6281122988
 const clients = new Map();
 const qrCodes = new Map(); // sessionId -> qrCode
 const sessionStatuses = new Map(); // sessionId -> status
+const skipGroupsCache = new Map(); // sessionId -> { groups: [], timestamp: Date }
+const SKIP_GROUPS_CACHE_TTL = 30000; // Cache for 30 seconds
 
 // Initialize scheduler service
 const schedulerService = new SchedulerService(clients);
@@ -2231,6 +2233,13 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'sessionId is required' });
         }
         
+        // Check cache first
+        const cached = skipGroupsCache.get(targetSessionId);
+        if (cached && (Date.now() - cached.timestamp) < SKIP_GROUPS_CACHE_TTL) {
+            console.log(`✅ [SKIP GROUPS CACHE] Returning cached data for ${targetSessionId} (age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
+            return res.json({ success: true, groups: cached.groups, cached: true });
+        }
+        
         const client = clients.get(targetSessionId);
         const sessionStatus = sessionStatuses.get(targetSessionId);
         
@@ -2256,13 +2265,13 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             });
         }
         
-        // Check if client is ready - wait up to 10 seconds for client.info to be available
+        // Check if client is ready - wait up to 5 seconds for client.info to be available (reduced from 10s)
         if (!client.info) {
             console.warn(`⚠️ [SKIP GROUPS] Client info not available for sessionId: ${targetSessionId}, waiting...`);
             
             // Wait for client.info with timeout
             let waited = 0;
-            const maxWait = 10000; // 10 seconds
+            const maxWait = 5000; // 5 seconds (reduced from 10)
             const checkInterval = 500; // Check every 500ms
             
             while (!client.info && waited < maxWait) {
@@ -2358,6 +2367,13 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
         
         console.log(`📋 [SKIP GROUPS] Returning ${availableGroups.length} available groups (${allGroups.length - availableGroups.length} already skipped)`);
         
+        // Cache the result
+        skipGroupsCache.set(targetSessionId, {
+            groups: availableGroups,
+            timestamp: Date.now()
+        });
+        console.log(`💾 [SKIP GROUPS CACHE] Cached ${availableGroups.length} groups for ${targetSessionId}`);
+        
         res.json({ success: true, groups: availableGroups });
     } catch (error) {
         console.error('Error getting groups:', error);
@@ -2437,6 +2453,10 @@ app.post('/api/skip-messages', authenticate, async (req, res) => {
                 name: name || null
             }
         });
+        
+        // Invalidate skip groups cache for this session
+        skipGroupsCache.delete(sessionId);
+        console.log(`🗑️ [SKIP GROUPS CACHE] Invalidated cache for ${sessionId} after adding skip rule`);
         
         res.json({
             success: true,
@@ -2555,6 +2575,10 @@ app.delete('/api/skip-messages/:id', authenticate, async (req, res) => {
                 phoneNumber: skipRule.phone_number || null
             }
         });
+        
+        // Invalidate skip groups cache for this session
+        skipGroupsCache.delete(skipRule.session_id);
+        console.log(`🗑️ [SKIP GROUPS CACHE] Invalidated cache for ${skipRule.session_id} after deleting skip rule`);
         
         res.json({ success: true, message: 'Skip rule deleted successfully' });
     } catch (error) {

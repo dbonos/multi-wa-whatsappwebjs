@@ -8,8 +8,10 @@ const pool = mysql.createPool({
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'wa_manager',
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: 50, // Increased from 10 to 50 to handle burst requests
     queueLimit: 0,
+    maxIdle: 10, // Maximum idle connections to keep
+    idleTimeout: 60000, // Close idle connections after 60 seconds
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     // NOTE:
