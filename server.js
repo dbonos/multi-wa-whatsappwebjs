@@ -3464,11 +3464,25 @@ async function initializeExistingSessions() {
                 client.initialize().then(async () => {
                     console.log(`✅ [AUTO-INIT] Client initialization started for: ${session_id}`);
                     
-                    // If status was ready in DB, wait a bit and check if client.info is available
+                    // If status was ready in DB, wait and check periodically if client.info is available
                     if (status === 'ready') {
-                        setTimeout(async () => {
-                            if (client.info && client.info.wid) {
-                                console.log(`✅ [AUTO-INIT] Session ${session_id} restored to ready state`);
+                        let checkCount = 0;
+                        const maxChecks = 12; // 12 checks x 5 seconds = 60 seconds max
+                        const checkInterval = setInterval(async () => {
+                            checkCount++;
+                            const currentClient = clients.get(session_id);
+                            
+                            // Check if client still exists
+                            if (!currentClient) {
+                                console.log(`⚠️  [AUTO-INIT] Client for ${session_id} was destroyed during initialization`);
+                                clearInterval(checkInterval);
+                                return;
+                            }
+                            
+                            // Check if client.info is available
+                            if (currentClient.info && currentClient.info.wid) {
+                                console.log(`✅ [AUTO-INIT] Session ${session_id} restored to ready state (after ${checkCount * 5} seconds)`);
+                                clearInterval(checkInterval);
                                 sessionStatuses.set(session_id, 'ready');
                                 await pool.execute(
                                     `UPDATE sessions 
@@ -3478,14 +3492,17 @@ async function initializeExistingSessions() {
                                          last_activity = CURRENT_TIMESTAMP
                                      WHERE session_id = ?`,
                                     [
-                                        client.info.wid?.user || null,
-                                        client.info.pushname || null,
+                                        currentClient.info.wid?.user || null,
+                                        currentClient.info.pushname || null,
                                         session_id
                                     ]
                                 );
-                                socketHandler.emitSessionStatus(session_id, 'ready', { info: client.info });
+                                socketHandler.emitSessionStatus(session_id, 'ready', { info: currentClient.info });
+                            } else if (checkCount >= maxChecks) {
+                                console.log(`⚠️  [AUTO-INIT] Session ${session_id} still not ready after ${maxChecks * 5} seconds - client.info not available`);
+                                clearInterval(checkInterval);
                             }
-                        }, 5000); // Wait 5 seconds for client to fully initialize
+                        }, 5000); // Check every 5 seconds
                     }
                 }).catch(err => {
                     console.error(`❌ [AUTO-INIT] Error initializing session ${session_id}:`, err.message);
