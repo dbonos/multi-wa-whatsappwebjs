@@ -2259,6 +2259,8 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
         const client = clients.get(targetSessionId);
         const sessionStatus = sessionStatuses.get(targetSessionId);
         
+        console.log(`📋 [SKIP GROUPS] Client check for ${targetSessionId}: exists=${!!client}, status=${sessionStatus || 'unknown'}, hasInfo=${client ? !!client.info : 'N/A'}`);
+        
         if (!client) {
             console.error(`❌ [SKIP GROUPS] Client not found for sessionId: ${targetSessionId}`);
             console.error(`📊 [SKIP GROUPS] Available sessions: ${Array.from(clients.keys()).join(', ')}`);
