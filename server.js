@@ -3575,7 +3575,14 @@ async function initializeExistingSessions() {
                     sessionStatuses.delete(session_id);
                 });
             } catch (err) {
-                console.log(`⚠️  [AUTO-INIT] Session file not found for ${session_id}, skipping...`);
+                // If session file doesn't exist but status is initializing or qr_generated, create new client anyway
+                if (status === 'initializing' || status === 'qr_generated') {
+                    console.log(`⚠️  [AUTO-INIT] Session file not found for ${session_id}, but status is ${status}. Will create new client to generate QR code.`);
+                    // Continue to create client below - don't skip
+                } else {
+                    console.log(`⚠️  [AUTO-INIT] Session file not found for ${session_id}, skipping...`);
+                    continue;
+                }
             }
         }
     } catch (error) {
