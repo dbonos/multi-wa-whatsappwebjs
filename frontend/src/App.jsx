@@ -13,6 +13,7 @@ import Contacts from './pages/Contacts';
 import SkipMessages from './pages/SkipMessages';
 import Statistics from './pages/Statistics';
 import ChangePassword from './pages/ChangePassword';
+import AdminMenuPermissions from './pages/AdminMenuPermissions';
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
@@ -99,6 +100,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <ChangePassword />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/menu-permissions"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminMenuPermissions />
             </Layout>
           </ProtectedRoute>
         }

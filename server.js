@@ -705,6 +705,21 @@ app.get('/api/sessions/:sessionId/status', authenticate, async (req, res) => {
 // MENU PERMISSIONS ENDPOINTS (Admin only)
 // ============================================
 
+// Get all users (Admin only)
+app.get('/api/users', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const [users] = await pool.execute(
+            `SELECT id, username, role, session_id, phone_number, created_at 
+             FROM users 
+             ORDER BY created_at DESC`
+        );
+        res.json({ success: true, users });
+    } catch (error) {
+        console.error('Error getting users:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get menu permissions for a user
 app.get('/api/users/:userId/menu-permissions', authenticate, requireAdmin, async (req, res) => {
     try {

@@ -63,6 +63,7 @@ export default function Layout({ children }) {
     { path: '/statistics', icon: BarChart3, label: 'Statistik', adminOnly: false },
     { path: '/broadcast', icon: Radio, label: 'Broadcast', adminOnly: true },
     { path: '/status', icon: Image, label: 'Status & Stories', adminOnly: true },
+    { path: '/admin/menu-permissions', icon: Settings, label: 'Menu Access', adminOnly: true },
   ];
 
   // Filter menu items based on admin status and permissions

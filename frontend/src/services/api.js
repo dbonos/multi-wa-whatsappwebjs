@@ -197,6 +197,11 @@ export const messagesAPI = {
   getDeleted: (params = {}) => api.get('/messages/deleted', { params }),
 };
 
+// Users API (Admin only)
+export const usersAPI = {
+  list: () => api.get('/users'),
+};
+
 // Status & Stories API
 export const statusAPI = {
   setStatus: (data) => {
