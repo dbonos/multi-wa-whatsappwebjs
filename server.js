@@ -3260,6 +3260,36 @@ async function initializeExistingSessions() {
         for (const session of sessions) {
             const { session_id, status } = session;
             
+            // Check if client already exists and is ready
+            if (clients.has(session_id)) {
+                const existingClient = clients.get(session_id);
+                const existingStatus = sessionStatuses.get(session_id);
+                if (existingStatus === 'ready' || (existingStatus === 'authenticated' && existingClient.info)) {
+                    console.log(`⏭️  [AUTO-INIT] Session ${session_id} already initialized (status: ${existingStatus}), skipping...`);
+                    // If authenticated with info, auto-set to ready
+                    if (existingStatus === 'authenticated' && existingClient.info) {
+                        console.log(`✅ [AUTO-INIT] Auto-setting authenticated session ${session_id} to ready`);
+                        sessionStatuses.set(session_id, 'ready');
+                        await pool.execute(
+                            `UPDATE sessions 
+                             SET status = 'ready', 
+                                 phone_number = ?,
+                                 display_name = ?,
+                                 connected_at = COALESCE(connected_at, CURRENT_TIMESTAMP),
+                                 last_activity = CURRENT_TIMESTAMP
+                             WHERE session_id = ?`,
+                            [
+                                existingClient.info.wid?.user || null,
+                                existingClient.info.pushname || null,
+                                session_id
+                            ]
+                        );
+                        socketHandler.emitSessionStatus(session_id, 'ready', { info: existingClient.info });
+                    }
+                    continue;
+                }
+            }
+            
             // Check if session file exists
             const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-${session_id}`);
             try {
