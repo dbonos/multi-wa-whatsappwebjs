@@ -22,6 +22,7 @@ const messageHandler = require('./src/services/messageHandler');
 const { authenticate, requireAdmin, requireUser, requireSessionOwner, generateToken } = require('./src/middleware/auth');
 const SocketHandler = require('./src/services/socketHandler');
 const otpService = require('./src/services/otpService');
+const healthMonitor = require('./src/services/healthMonitor');
 const statisticsService = require('./src/services/statisticsService');
 const SchedulerService = require('./src/services/schedulerService');
 const activityLogger = require('./src/services/activityLogger');
@@ -943,6 +944,130 @@ app.put('/api/users/:userId/menu-permissions', authenticate, requireAdmin, async
         res.status(500).json({ error: error.message });
     }
 });
+
+// ============================================
+// HEALTH CHECK ENDPOINTS
+// ============================================
+
+// Health check endpoint (public)
+app.get('/api/health', async (req, res) => {
+    try {
+        const stats = healthMonitor.getStats();
+        const dbHealthy = await checkDatabaseHealth();
+        
+        const health = {
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            memory: {
+                usage: `${stats.memoryUsage.toFixed(1)}%`,
+                threshold: stats.memoryThreshold,
+                process: {
+                    heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
+                    heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,
+                    rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`
+                }
+            },
+            chrome: {
+                processes: stats.chromeProcesses,
+                zombies: stats.zombieProcesses
+            },
+            database: {
+                connected: dbHealthy
+            },
+            monitoring: {
+                active: stats.isActive,
+                lastCheck: stats.lastCheck,
+                cleanupCount: stats.cleanupCount
+            },
+            sessions: {
+                total: clients.size,
+                active: Array.from(clients.keys())
+            }
+        };
+
+        // Determine overall health status
+        if (!dbHealthy) {
+            health.status = 'degraded';
+            health.issues = ['Database connection issue'];
+        } else if (stats.memoryUsage >= 90) {
+            health.status = 'critical';
+            health.issues = ['Critical memory usage'];
+        } else if (stats.memoryUsage >= 85) {
+            health.status = 'warning';
+            health.issues = ['High memory usage'];
+        } else if (stats.chromeProcesses > 20) {
+            health.status = 'warning';
+            health.issues = health.issues || [];
+            health.issues.push('Too many Chrome processes');
+        }
+
+        const statusCode = health.status === 'ok' ? 200 : health.status === 'warning' ? 200 : 503;
+        res.status(statusCode).json(health);
+    } catch (error) {
+        console.error('Error in health check:', error);
+        res.status(503).json({
+            status: 'error',
+            error: error.message
+        });
+    }
+});
+
+// Detailed health check (admin only)
+app.get('/api/admin/health', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const stats = healthMonitor.getStats();
+        const memInfo = await healthMonitor.getMemoryInfo();
+        
+        res.json({
+            success: true,
+            health: {
+                ...stats,
+                memoryDetails: memInfo,
+                processInfo: {
+                    pid: process.pid,
+                    uptime: process.uptime(),
+                    nodeVersion: process.version,
+                    platform: process.platform
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error getting health details:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Trigger manual cleanup (admin only)
+app.post('/api/admin/cleanup', authenticate, requireAdmin, async (req, res) => {
+    try {
+        console.log('🧹 [ADMIN] Manual cleanup triggered');
+        await healthMonitor.cleanupZombieProcesses();
+        
+        res.json({
+            success: true,
+            message: 'Cleanup completed',
+            stats: healthMonitor.getStats()
+        });
+    } catch (error) {
+        console.error('Error during manual cleanup:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+async function checkDatabaseHealth() {
+    try {
+        await pool.execute('SELECT 1');
+        return true;
+    } catch (error) {
+        console.error('Database health check failed:', error.message);
+        return false;
+    }
+}
+
+// ============================================
+// AUTH & USER MANAGEMENT ENDPOINTS
+// ============================================
 
 // Get current user's menu permissions
 app.get('/api/auth/menu-permissions', authenticate, async (req, res) => {
@@ -3427,6 +3552,16 @@ function createClient(sessionId) {
         );
 
         socketHandler.emitSessionStatus(sessionId, 'disconnected', { reason });
+        
+        // Cleanup Chrome processes for this session after a delay
+        // (give time for graceful shutdown)
+        setTimeout(async () => {
+            try {
+                await healthMonitor.cleanupSessionProcesses(sessionId, clients);
+            } catch (error) {
+                console.error(`❌ [DISCONNECTED] Error cleaning up session ${sessionId}:`, error.message);
+            }
+        }, 30000); // Wait 30 seconds before cleanup
     });
 
     return client;
@@ -3701,6 +3836,10 @@ server.listen(PORT, async () => {
     // Start scheduler service for daily statistics
     schedulerService.start();
     
+    // Start health monitoring
+    healthMonitor.start();
+    console.log(`🏥 Health monitoring started`);
+    
     console.log(`   POST /api/status/set - Set status`);
     console.log(`   POST /api/stories/set - Set story`);
     console.log(`   POST /api/broadcast/send - Send broadcast`);
@@ -3733,6 +3872,11 @@ process.on('SIGINT', async () => {
     // Stop scheduler
     if (schedulerService) {
         schedulerService.stop();
+    }
+    
+    // Stop health monitor
+    if (healthMonitor) {
+        healthMonitor.stop();
     }
     
     for (const [sessionId, client] of clients) {
