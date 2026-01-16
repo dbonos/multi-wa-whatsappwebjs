@@ -32,6 +32,7 @@ const socketHandler = new SocketHandler(server);
 socketHandler.initialize();
 
 const PORT = process.env.PORT || 3000;
+const DEFAULT_OTP_SESSION_ID = process.env.DEFAULT_OTP_SESSION_ID || '628112298898';
 
 // Store multiple WhatsApp clients
 const clients = new Map();
@@ -261,7 +262,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
             return res.status(400).json({ error: 'Session name (phone number) required' });
         }
 
-        // Check if session exists
+        // Check if target session exists (user login session)
         const [sessions] = await pool.execute(
             'SELECT * FROM sessions WHERE session_id = ?',
             [sessionName]
@@ -269,6 +270,16 @@ app.post('/api/auth/request-otp', async (req, res) => {
 
         if (sessions.length === 0) {
             return res.status(404).json({ error: 'Session not found' });
+        }
+
+        // Check default OTP sender session exists
+        const [senderSessions] = await pool.execute(
+            'SELECT * FROM sessions WHERE session_id = ?',
+            [DEFAULT_OTP_SESSION_ID]
+        );
+
+        if (senderSessions.length === 0) {
+            return res.status(500).json({ error: `Default OTP session not found: ${DEFAULT_OTP_SESSION_ID}` });
         }
 
         const ipAddress = req.ip || req.connection.remoteAddress;
@@ -284,8 +295,8 @@ app.post('/api/auth/request-otp', async (req, res) => {
             });
         }
 
-        // Send OTP via WhatsApp if client is ready
-        const client = clients.get(sessionName);
+        // Send OTP via default WhatsApp session if client is ready
+        const client = clients.get(DEFAULT_OTP_SESSION_ID);
         if (client && client.info) {
             try {
                 // Get OTP code from database
@@ -302,6 +313,8 @@ app.post('/api/auth/request-otp', async (req, res) => {
                 console.error('Error sending OTP via WhatsApp:', error);
                 // Continue anyway, OTP is still generated
             }
+        } else {
+            console.warn(`⚠️ [OTP] Default session not ready for sending: ${DEFAULT_OTP_SESSION_ID}`);
         }
 
         res.json({
