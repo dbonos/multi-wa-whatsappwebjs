@@ -167,15 +167,16 @@ export default function SessionCard({ session, onDelete, onRefresh, isAdmin = fa
               <QrCode className="w-4 h-4" />
               Show QR
             </button>
-          ) : status === 'ready' ? (
+          ) : (
             <button
               onClick={handleRefresh}
               className="btn btn-secondary flex-1 flex items-center justify-center gap-2"
+              disabled={status === 'initializing' || status === 'qr_generated'}
             >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
+              <RefreshCw className={`w-4 h-4 ${status === 'initializing' ? 'animate-spin' : ''}`} />
+              {status === 'initializing' ? 'Restarting...' : 'Restart'}
             </button>
-          ) : null}
+          )}
 
           <button
             onClick={handleDelete}
