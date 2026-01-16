@@ -2942,12 +2942,24 @@ function createClient(sessionId) {
 
         socketHandler.emitSessionStatus(sessionId, 'authenticated');
 
-        // Fallback: If authenticated but not ready after 30 seconds, check if we can auto-set to ready
-        setTimeout(async () => {
+        // Fallback: Check periodically if client.info is available and auto-set to ready
+        // Check every 5 seconds for up to 30 seconds
+        let checkCount = 0;
+        const maxChecks = 6; // 6 checks x 5 seconds = 30 seconds max
+        const checkInterval = setInterval(async () => {
+            checkCount++;
             const currentStatus = sessionStatuses.get(sessionId);
-            // Only auto-set if still authenticated and client.info is available
-            if (currentStatus === 'authenticated' && client.info) {
-                console.log(`✅ [AUTHENTICATED FALLBACK] Auto-setting session ${sessionId} to ready (authenticated but ready event not fired)`);
+            
+            // If already ready, stop checking
+            if (currentStatus === 'ready') {
+                clearInterval(checkInterval);
+                return;
+            }
+            
+            // Check if client.info is available
+            if (client.info && client.info.wid) {
+                console.log(`✅ [AUTHENTICATED FALLBACK] Auto-setting session ${sessionId} to ready (client.info available after ${checkCount * 5} seconds)`);
+                clearInterval(checkInterval);
                 sessionStatuses.set(sessionId, 'ready');
                 qrCodes.delete(sessionId);
                 
@@ -2967,8 +2979,12 @@ function createClient(sessionId) {
                 );
                 
                 socketHandler.emitSessionStatus(sessionId, 'ready', { info: client.info });
+            } else if (checkCount >= maxChecks) {
+                // After 30 seconds, if still no info, stop checking
+                console.log(`⚠️  [AUTHENTICATED FALLBACK] Session ${sessionId} still authenticated after 30 seconds, but client.info not available`);
+                clearInterval(checkInterval);
             }
-        }, 30000); // Wait 30 seconds after authenticated
+        }, 5000); // Check every 5 seconds
     });
 
     // Ready event
@@ -3273,6 +3289,9 @@ async function initializeExistingSessions() {
                      WHERE session_id = ?`,
                     [session_id]
                 );
+                // Skip reinitialize - session will be handled by next AUTO-INIT cycle with ready status
+                console.log(`⏭️  [AUTO-INIT] Skipping reinitialize for ${session_id} - marked as ready, will initialize in next cycle`);
+                continue;
             }
             
             // Check if client already exists and is ready
