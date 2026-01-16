@@ -2198,27 +2198,37 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             });
         }
         
-        // Check if client is ready - wait up to 5 seconds for client.info to be available
+        // Check if client is ready - wait up to 10 seconds for client.info to be available
         if (!client.info) {
             console.warn(`⚠️ [SKIP GROUPS] Client info not available for sessionId: ${targetSessionId}, waiting...`);
             
             // Wait for client.info with timeout
             let waited = 0;
-            const maxWait = 5000; // 5 seconds
+            const maxWait = 10000; // 10 seconds
             const checkInterval = 500; // Check every 500ms
             
             while (!client.info && waited < maxWait) {
                 await new Promise(resolve => setTimeout(resolve, checkInterval));
                 waited += checkInterval;
+                
+                // Check if client still exists (might have been destroyed)
+                if (!clients.has(targetSessionId)) {
+                    console.error(`❌ [SKIP GROUPS] Client was destroyed while waiting for info`);
+                    return res.status(404).json({ 
+                        error: 'Session client was disconnected. Please restart the session.',
+                        sessionId: targetSessionId,
+                        message: 'The WhatsApp client connection was lost. Please restart the session from the dashboard.'
+                    });
+                }
             }
             
             if (!client.info) {
                 console.warn(`⚠️ [SKIP GROUPS] Client info still not available after ${waited}ms`);
                 return res.status(404).json({ 
-                    error: 'Session is not ready yet. Please wait for the session to be fully initialized.',
+                    error: 'Session is not ready yet. Please wait for the session to be fully initialized or restart the session.',
                     sessionId: targetSessionId,
                     sessionStatus: sessionStatus || 'loading',
-                    message: 'The WhatsApp client is still initializing. Please wait a moment and try again.'
+                    message: 'The WhatsApp client is still initializing. Please wait a moment and try again, or restart the session if it takes too long.'
                 });
             }
         }
