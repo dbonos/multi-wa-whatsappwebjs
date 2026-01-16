@@ -3359,32 +3359,56 @@ async function initializeExistingSessions() {
                     continue;
                 }
                 
-                // If status is ready but client.info not available yet, wait a bit
-                if (existingStatus === 'ready' || status === 'ready') {
-                    console.log(`⏳ [AUTO-INIT] Session ${session_id} marked as ready but client.info not available yet, waiting...`);
-                    // Wait 3 seconds and check again
-                    setTimeout(async () => {
-                        if (existingClient.info && existingClient.info.wid) {
-                            console.log(`✅ [AUTO-INIT] Session ${session_id} client.info now available`);
-                            sessionStatuses.set(session_id, 'ready');
-                            await pool.execute(
-                                `UPDATE sessions 
-                                 SET status = 'ready', 
-                                     phone_number = ?,
-                                     display_name = ?,
-                                     connected_at = COALESCE(connected_at, CURRENT_TIMESTAMP),
-                                     last_activity = CURRENT_TIMESTAMP
-                                 WHERE session_id = ?`,
-                                [
-                                    existingClient.info.wid?.user || null,
-                                    existingClient.info.pushname || null,
-                                    session_id
-                                ]
-                            );
-                            socketHandler.emitSessionStatus(session_id, 'ready', { info: existingClient.info });
+                // If status is ready in DB but client.info not available, check if client is still valid
+                if (status === 'ready' && !existingClient.info) {
+                    // Check if client is still alive (not destroyed)
+                    try {
+                        // Try to access a property to see if client is still valid
+                        const testInfo = existingClient.info;
+                        if (!testInfo) {
+                            console.log(`⚠️  [AUTO-INIT] Session ${session_id} status is ready but client.info not available, client may be stuck. Will reinitialize.`);
+                            // Destroy old client and reinitialize
+                            try {
+                                await existingClient.destroy();
+                            } catch (err) {
+                                console.log(`⚠️  [AUTO-INIT] Error destroying stuck client: ${err.message}`);
+                            }
+                            clients.delete(session_id);
+                            sessionStatuses.delete(session_id);
+                            // Continue to create new client below
+                        } else {
+                            // Wait a bit more for client.info
+                            console.log(`⏳ [AUTO-INIT] Session ${session_id} marked as ready but client.info not available yet, waiting...`);
+                            setTimeout(async () => {
+                                const checkClient = clients.get(session_id);
+                                if (checkClient && checkClient.info && checkClient.info.wid) {
+                                    console.log(`✅ [AUTO-INIT] Session ${session_id} client.info now available`);
+                                    sessionStatuses.set(session_id, 'ready');
+                                    await pool.execute(
+                                        `UPDATE sessions 
+                                         SET status = 'ready', 
+                                             phone_number = ?,
+                                             display_name = ?,
+                                             connected_at = COALESCE(connected_at, CURRENT_TIMESTAMP),
+                                             last_activity = CURRENT_TIMESTAMP
+                                         WHERE session_id = ?`,
+                                        [
+                                            checkClient.info.wid?.user || null,
+                                            checkClient.info.pushname || null,
+                                            session_id
+                                        ]
+                                    );
+                                    socketHandler.emitSessionStatus(session_id, 'ready', { info: checkClient.info });
+                                }
+                            }, 5000); // Wait 5 seconds
+                            continue; // Skip reinitialize for now
                         }
-                    }, 3000);
-                    continue; // Skip reinitialize, let it wait
+                    } catch (err) {
+                        console.log(`⚠️  [AUTO-INIT] Client for ${session_id} appears to be invalid, will reinitialize: ${err.message}`);
+                        clients.delete(session_id);
+                        sessionStatuses.delete(session_id);
+                        // Continue to create new client below
+                    }
                 }
                 
                 // If authenticated with info, auto-set to ready
@@ -3408,6 +3432,12 @@ async function initializeExistingSessions() {
                     socketHandler.emitSessionStatus(session_id, 'ready', { info: existingClient.info });
                     continue;
                 }
+            }
+            
+            // If status is ready in DB but no client exists, we need to create one
+            if (status === 'ready' && !clients.has(session_id)) {
+                console.log(`⚠️  [AUTO-INIT] Session ${session_id} is ready in DB but no client in memory, creating client...`);
+                // Continue to create client below
             }
             
             // Check if session file exists
