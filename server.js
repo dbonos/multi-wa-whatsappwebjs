@@ -3506,84 +3506,84 @@ async function initializeExistingSessions() {
             
             // Check if session file exists
             const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-${session_id}`);
+            let sessionFileExists = false;
             try {
                 await fs.access(sessionPath);
-                console.log(`🔄 [AUTO-INIT] Initializing session: ${session_id} (status: ${status})`);
-                
-                // Create client instance
-                const client = createClient(session_id);
-                clients.set(session_id, client);
-                
-                // Set initial status based on DB status
-                if (status === 'ready') {
-                    sessionStatuses.set(session_id, 'initializing'); // Will be set to ready when client.info is available
-                } else {
-                    sessionStatuses.set(session_id, 'initializing');
-                }
-
-                // Initialize client (will auto-login if session file exists)
-                // Add delay to avoid multiple simultaneous initializations
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                client.initialize().then(async () => {
-                    console.log(`✅ [AUTO-INIT] Client initialization started for: ${session_id}`);
-                    
-                    // If status was ready in DB, wait and check periodically if client.info is available
-                    if (status === 'ready') {
-                        let checkCount = 0;
-                        const maxChecks = 12; // 12 checks x 5 seconds = 60 seconds max
-                        const checkInterval = setInterval(async () => {
-                            checkCount++;
-                            const currentClient = clients.get(session_id);
-                            
-                            // Check if client still exists
-                            if (!currentClient) {
-                                console.log(`⚠️  [AUTO-INIT] Client for ${session_id} was destroyed during initialization`);
-                                clearInterval(checkInterval);
-                                return;
-                            }
-                            
-                            // Check if client.info is available
-                            if (currentClient.info && currentClient.info.wid) {
-                                console.log(`✅ [AUTO-INIT] Session ${session_id} restored to ready state (after ${checkCount * 5} seconds)`);
-                                clearInterval(checkInterval);
-                                sessionStatuses.set(session_id, 'ready');
-                                await pool.execute(
-                                    `UPDATE sessions 
-                                     SET status = 'ready', 
-                                         phone_number = ?,
-                                         display_name = ?,
-                                         last_activity = CURRENT_TIMESTAMP
-                                     WHERE session_id = ?`,
-                                    [
-                                        currentClient.info.wid?.user || null,
-                                        currentClient.info.pushname || null,
-                                        session_id
-                                    ]
-                                );
-                                socketHandler.emitSessionStatus(session_id, 'ready', { info: currentClient.info });
-                            } else if (checkCount >= maxChecks) {
-                                console.log(`⚠️  [AUTO-INIT] Session ${session_id} still not ready after ${maxChecks * 5} seconds - client.info not available`);
-                                clearInterval(checkInterval);
-                            }
-                        }, 5000); // Check every 5 seconds
-                    }
-                }).catch(err => {
-                    console.error(`❌ [AUTO-INIT] Error initializing session ${session_id}:`, err.message);
-                    // Clean up failed client
-                    clients.delete(session_id);
-                    sessionStatuses.delete(session_id);
-                });
+                sessionFileExists = true;
             } catch (err) {
                 // If session file doesn't exist but status is initializing or qr_generated, create new client anyway
                 if (status === 'initializing' || status === 'qr_generated') {
                     console.log(`⚠️  [AUTO-INIT] Session file not found for ${session_id}, but status is ${status}. Will create new client to generate QR code.`);
-                    // Continue to create client below - don't skip
+                    sessionFileExists = false; // Will create new client
                 } else {
                     console.log(`⚠️  [AUTO-INIT] Session file not found for ${session_id}, skipping...`);
                     continue;
                 }
             }
+            
+            // Create client instance (either file exists or we're creating new one)
+            console.log(`🔄 [AUTO-INIT] Initializing session: ${session_id} (status: ${status})`);
+            
+            // Create client instance
+            const client = createClient(session_id);
+            clients.set(session_id, client);
+            
+            // Set initial status
+            sessionStatuses.set(session_id, 'initializing');
+
+            // Initialize client (will auto-login if session file exists, or generate QR if not)
+            // Add delay to avoid multiple simultaneous initializations
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            client.initialize().then(async () => {
+                console.log(`✅ [AUTO-INIT] Client initialization started for: ${session_id}`);
+                
+                // If status was ready in DB, wait and check periodically if client.info is available
+                if (status === 'ready') {
+                    let checkCount = 0;
+                    const maxChecks = 12; // 12 checks x 5 seconds = 60 seconds max
+                    const checkInterval = setInterval(async () => {
+                        checkCount++;
+                        const currentClient = clients.get(session_id);
+                        
+                        // Check if client still exists
+                        if (!currentClient) {
+                            console.log(`⚠️  [AUTO-INIT] Client for ${session_id} was destroyed during initialization`);
+                            clearInterval(checkInterval);
+                            return;
+                        }
+                        
+                        // Check if client.info is available
+                        if (currentClient.info && currentClient.info.wid) {
+                            console.log(`✅ [AUTO-INIT] Session ${session_id} restored to ready state (after ${checkCount * 5} seconds)`);
+                            clearInterval(checkInterval);
+                            sessionStatuses.set(session_id, 'ready');
+                            await pool.execute(
+                                `UPDATE sessions 
+                                 SET status = 'ready', 
+                                     phone_number = ?,
+                                     display_name = ?,
+                                     last_activity = CURRENT_TIMESTAMP
+                                 WHERE session_id = ?`,
+                                [
+                                    currentClient.info.wid?.user || null,
+                                    currentClient.info.pushname || null,
+                                    session_id
+                                ]
+                            );
+                            socketHandler.emitSessionStatus(session_id, 'ready', { info: currentClient.info });
+                        } else if (checkCount >= maxChecks) {
+                            console.log(`⚠️  [AUTO-INIT] Session ${session_id} still not ready after ${maxChecks * 5} seconds - client.info not available`);
+                            clearInterval(checkInterval);
+                        }
+                    }, 5000); // Check every 5 seconds
+                }
+            }).catch(err => {
+                console.error(`❌ [AUTO-INIT] Error initializing session ${session_id}:`, err.message);
+                // Clean up failed client
+                clients.delete(session_id);
+                sessionStatuses.delete(session_id);
+            });
         }
     } catch (error) {
         console.error('❌ [AUTO-INIT] Error initializing existing sessions:', error.message);
