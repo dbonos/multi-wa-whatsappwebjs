@@ -2941,6 +2941,34 @@ function createClient(sessionId) {
         );
 
         socketHandler.emitSessionStatus(sessionId, 'authenticated');
+
+        // Fallback: If authenticated but not ready after 30 seconds, check if we can auto-set to ready
+        setTimeout(async () => {
+            const currentStatus = sessionStatuses.get(sessionId);
+            // Only auto-set if still authenticated and client.info is available
+            if (currentStatus === 'authenticated' && client.info) {
+                console.log(`✅ [AUTHENTICATED FALLBACK] Auto-setting session ${sessionId} to ready (authenticated but ready event not fired)`);
+                sessionStatuses.set(sessionId, 'ready');
+                qrCodes.delete(sessionId);
+                
+                await pool.execute(
+                    `UPDATE sessions 
+                     SET status = 'ready', 
+                         phone_number = ?,
+                         display_name = ?,
+                         connected_at = COALESCE(connected_at, CURRENT_TIMESTAMP),
+                         last_activity = CURRENT_TIMESTAMP
+                     WHERE session_id = ?`,
+                    [
+                        client.info.wid?.user || null,
+                        client.info.pushname || null,
+                        sessionId
+                    ]
+                );
+                
+                socketHandler.emitSessionStatus(sessionId, 'ready', { info: client.info });
+            }
+        }, 30000); // Wait 30 seconds after authenticated
     });
 
     // Ready event
