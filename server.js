@@ -297,6 +297,8 @@ app.post('/api/auth/request-otp', async (req, res) => {
 
         // Send OTP via default WhatsApp session if client is ready
         const client = clients.get(DEFAULT_OTP_SESSION_ID);
+        let otpSent = false;
+        let otpSendError = null;
         if (client && client.info) {
             try {
                 // Get OTP code from database
@@ -307,19 +309,26 @@ app.post('/api/auth/request-otp', async (req, res) => {
 
                 if (users.length > 0 && users[0].otp_code) {
                     const otpMessage = `Your login OTP code is: ${users[0].otp_code}\n\nThis code will expire in 10 minutes.`;
-                    await client.sendMessage(`${sessionName}@c.us`, otpMessage);
+                    // Avoid sendSeen to prevent markedUnread crash on some WA versions
+                    await client.sendMessage(`${sessionName}@c.us`, otpMessage, { sendSeen: false });
+                    otpSent = true;
+                } else {
+                    otpSendError = 'OTP not found in database';
                 }
             } catch (error) {
                 console.error('Error sending OTP via WhatsApp:', error);
-                // Continue anyway, OTP is still generated
+                otpSendError = error.message;
             }
         } else {
-            console.warn(`⚠️ [OTP] Default session not ready for sending: ${DEFAULT_OTP_SESSION_ID}`);
+            otpSendError = `Default session not ready: ${DEFAULT_OTP_SESSION_ID}`;
+            console.warn(`⚠️ [OTP] ${otpSendError}`);
         }
 
         res.json({
-            success: true,
-            message: 'OTP sent successfully',
+            success: otpSent,
+            sent: otpSent,
+            message: otpSent ? 'OTP sent successfully' : 'OTP generated but not sent',
+            error: otpSendError,
             expiresIn: result.expiresIn
         });
     } catch (error) {
