@@ -2180,22 +2180,47 @@ app.get('/api/skip-messages/groups', authenticate, async (req, res) => {
             console.error(`❌ [SKIP GROUPS] Client not found for sessionId: ${targetSessionId}`);
             console.error(`📊 [SKIP GROUPS] Available sessions: ${Array.from(clients.keys()).join(', ')}`);
             console.error(`📊 [SKIP GROUPS] Session status: ${sessionStatus || 'unknown'}`);
+            
+            // Check database status
+            const [dbSessions] = await pool.execute(
+                'SELECT status FROM sessions WHERE session_id = ?',
+                [targetSessionId]
+            );
+            const dbStatus = dbSessions.length > 0 ? dbSessions[0].status : 'not_found';
+            
             return res.status(404).json({ 
                 error: 'Session not found or not ready',
                 sessionId: targetSessionId,
                 availableSessions: Array.from(clients.keys()),
-                sessionStatus: sessionStatus || 'unknown'
+                sessionStatus: sessionStatus || 'unknown',
+                dbStatus: dbStatus,
+                message: dbStatus === 'ready' ? 'Session is ready in database but client is still initializing. Please wait a moment and try again.' : 'Session is not ready yet.'
             });
         }
         
-        // Check if client is ready
+        // Check if client is ready - wait up to 5 seconds for client.info to be available
         if (!client.info) {
-            console.warn(`⚠️ [SKIP GROUPS] Client info not available for sessionId: ${targetSessionId}`);
-            return res.status(404).json({ 
-                error: 'Session is not ready yet. Please wait for the session to be fully initialized.',
-                sessionId: targetSessionId,
-                sessionStatus: sessionStatus || 'loading'
-            });
+            console.warn(`⚠️ [SKIP GROUPS] Client info not available for sessionId: ${targetSessionId}, waiting...`);
+            
+            // Wait for client.info with timeout
+            let waited = 0;
+            const maxWait = 5000; // 5 seconds
+            const checkInterval = 500; // Check every 500ms
+            
+            while (!client.info && waited < maxWait) {
+                await new Promise(resolve => setTimeout(resolve, checkInterval));
+                waited += checkInterval;
+            }
+            
+            if (!client.info) {
+                console.warn(`⚠️ [SKIP GROUPS] Client info still not available after ${waited}ms`);
+                return res.status(404).json({ 
+                    error: 'Session is not ready yet. Please wait for the session to be fully initialized.',
+                    sessionId: targetSessionId,
+                    sessionStatus: sessionStatus || 'loading',
+                    message: 'The WhatsApp client is still initializing. Please wait a moment and try again.'
+                });
+            }
         }
         
         // Get groups from database (contacts that have messages)
