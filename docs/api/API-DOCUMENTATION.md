@@ -114,6 +114,42 @@ Authorization: Bearer <token>
 
 ---
 
+## 👥 User Management (Admin)
+
+### List Users
+```http
+GET /api/users
+Authorization: Bearer <token>
+```
+
+### Get User Menu Permissions
+```http
+GET /api/users/:userId/menu-permissions
+Authorization: Bearer <token>
+```
+
+### Update User Menu Permissions
+```http
+PUT /api/users/:userId/menu-permissions
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "permissions": [
+    { "menu_path": "dashboard", "is_visible": true },
+    { "menu_path": "messages", "is_visible": true }
+  ]
+}
+```
+
+### Get My Menu Permissions
+```http
+GET /api/auth/menu-permissions
+Authorization: Bearer <token>
+```
+
+---
+
 ## 💬 Message Endpoints
 
 ### Send Message (Text)

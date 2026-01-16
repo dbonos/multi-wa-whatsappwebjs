@@ -98,7 +98,11 @@
   - Message status updates
   - New incoming messages
 
-### 10. **File Storage**
+### 10. **Admin Controls**
+- [x] Menu visibility control per user/session
+- [x] Admin-only settings for webhooks & public domain
+
+### 11. **File Storage**
 - [x] Organized folder structure: `attachments/YYYY-MM-DD/session_id/`
 - [x] Support semua file types
 - [x] Database tracking
