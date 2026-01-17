@@ -509,11 +509,16 @@ app.get('/api/sessions', authenticate, async (req, res) => {
             [sessions] = await pool.execute(query, [req.user.session_id]);
         }
 
-        // Add real-time status from memory
-        const sessionsWithStatus = sessions.map(s => ({
-            ...s,
-            realtime_status: sessionStatuses.get(s.session_id) || s.status,
-            is_active: clients.has(s.session_id)
+        // Add real-time status from memory and session data status
+        const sessionsWithStatus = await Promise.all(sessions.map(async (s) => {
+            const sessionDataStatus = await checkSessionDataExists(s.session_id);
+            return {
+                ...s,
+                realtime_status: sessionStatuses.get(s.session_id) || s.status,
+                is_active: clients.has(s.session_id),
+                session_data_exists: sessionDataStatus.exists,
+                session_data_reason: sessionDataStatus.reason
+            };
         }));
 
         res.json({ success: true, sessions: sessionsWithStatus });
@@ -709,7 +714,7 @@ app.get('/api/sessions/:sessionId/qr', authenticate, async (req, res) => {
     }
 });
 
-// Restart session (stop and reinitialize)
+// Restart session (re-initialize without destroying auth data)
 app.post('/api/sessions/:sessionId/restart', authenticate, async (req, res) => {
     try {
         const { sessionId } = req.params;
@@ -733,35 +738,36 @@ app.post('/api/sessions/:sessionId/restart', authenticate, async (req, res) => {
             console.log(`🔄 [RESTART SESSION] Client destroyed: ${sessionId}`);
         }
 
-        qrCodes.delete(sessionId);
-        sessionStatuses.delete(sessionId);
-        console.log(`🔄 [RESTART SESSION] Cleared QR code and status: ${sessionId}`);
+        // Don't delete QR codes or session status - let LocalAuth handle reconnection
+        // qrCodes.delete(sessionId); // REMOVED
+        // sessionStatuses.delete(sessionId); // REMOVED
+        sessionStatuses.set(sessionId, 'reconnecting');
+        console.log(`🔄 [RESTART SESSION] Status set to reconnecting: ${sessionId}`);
 
-        // Update database status
+        // Update database status to reconnecting
         await pool.execute(
-            `UPDATE sessions SET status = 'initializing', updated_at = CURRENT_TIMESTAMP WHERE session_id = ?`,
+            `UPDATE sessions SET status = 'reconnecting', updated_at = CURRENT_TIMESTAMP WHERE session_id = ?`,
             [sessionId]
         );
 
         // Wait a bit before recreating
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Create new client instance
+        // Create new client instance (LocalAuth will auto-load session data)
         const newClient = createClient(sessionId);
         clients.set(sessionId, newClient);
-        sessionStatuses.set(sessionId, 'initializing');
 
-        // Initialize client
-        console.log(`🔄 [RESTART SESSION] Initializing new client for: ${sessionId}`);
+        // Initialize client (should auto-authenticate if session data exists)
+        console.log(`🔄 [RESTART SESSION] Re-initializing client for: ${sessionId} (auto-reconnect mode)`);
         newClient.initialize().then(() => {
-            console.log(`✅ [RESTART SESSION] Client initialization started for: ${sessionId}`);
+            console.log(`✅ [RESTART SESSION] Client re-initialization started for: ${sessionId}`);
         }).catch(err => {
-            console.error(`❌ [RESTART SESSION] Error initializing session ${sessionId}:`, err.message);
+            console.error(`❌ [RESTART SESSION] Error re-initializing session ${sessionId}:`, err.message);
             clients.delete(sessionId);
-            sessionStatuses.delete(sessionId);
+            sessionStatuses.set(sessionId, 'disconnected');
         });
 
-        console.log(`✅ [RESTART SESSION] Session ${sessionId} restart initiated`);
+        console.log(`✅ [RESTART SESSION] Session ${sessionId} restart initiated (auto-reconnect)`);
         
         // Log activity
         await activityLogger.log({
@@ -771,14 +777,14 @@ app.post('/api/sessions/:sessionId/restart', authenticate, async (req, res) => {
             action: 'restart_session',
             resourceType: 'session',
             resourceId: sessionId,
-            description: `Restarted WhatsApp session: ${sessionId}`,
+            description: `Restarted WhatsApp session (auto-reconnect): ${sessionId}`,
             ipAddress: req.ip || req.connection.remoteAddress,
             userAgent: req.get('user-agent')
         });
         
         res.json({ 
             success: true, 
-            message: `Session ${sessionId} restart initiated. Status will update shortly.`,
+            message: `Session ${sessionId} restart initiated. Reconnecting...`,
             sessionId 
         });
     } catch (error) {
@@ -909,12 +915,16 @@ app.get('/api/sessions/:sessionId/diagnostic', authenticate, async (req, res) =>
             pupBrowser: client.pupBrowser ? 'exists' : 'null'
         };
 
+        // Check session data on disk
+        const sessionDataStatus = await checkSessionDataExists(sessionId);
+
         res.json({
             success: true,
             sessionId,
             memoryStatus: status,
             dbStatus,
             clientState,
+            sessionDataStatus,
             eventListeners,
             totalEventListeners: Object.values(eventListeners).reduce((sum, count) => sum + count, 0),
             timestamp: new Date().toISOString()
@@ -3127,6 +3137,35 @@ app.post('/api/statistics/send', authenticate, requireAdmin, async (req, res) =>
 // ============================================
 // WHATSAPP CLIENT SETUP
 // ============================================
+
+// Check if session auth data exists on disk
+async function checkSessionDataExists(sessionId) {
+    try {
+        const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-${sessionId}`);
+        const fsSync = require('fs');
+        
+        if (!fsSync.existsSync(sessionPath)) {
+            return { exists: false, reason: 'directory_not_found' };
+        }
+        
+        // Check if session data file exists (Default/Session Storage or similar)
+        const files = await fs.readdir(sessionPath);
+        const hasSessionData = files.some(file => 
+            file.includes('Session Storage') || 
+            file.includes('Local Storage') || 
+            file.includes('session-')
+        );
+        
+        if (!hasSessionData) {
+            return { exists: false, reason: 'no_auth_files' };
+        }
+        
+        return { exists: true, reason: 'valid' };
+    } catch (error) {
+        console.error(`❌ [SESSION DATA CHECK] Error checking session data for ${sessionId}:`, error.message);
+        return { exists: false, reason: 'error', error: error.message };
+    }
+}
 
 function createClient(sessionId) {
     console.log(`🔧 [CREATE CLIENT] Creating WhatsApp client for session: ${sessionId}`);

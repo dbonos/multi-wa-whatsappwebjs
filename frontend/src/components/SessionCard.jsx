@@ -10,11 +10,13 @@ import {
   QrCode,
   Trash2,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 
 const statusConfig = {
   ready: { color: 'green', icon: CheckCircle2, label: 'Ready' },
   authenticated: { color: 'blue', icon: CheckCircle2, label: 'Authenticated' },
+  reconnecting: { color: 'blue', icon: RefreshCw, label: 'Reconnecting' },
   qr_generated: { color: 'yellow', icon: Loader2, label: 'QR Generated' },
   initializing: { color: 'gray', icon: Loader2, label: 'Initializing' },
   disconnected: { color: 'red', icon: XCircle, label: 'Disconnected' },
@@ -55,8 +57,8 @@ export default function SessionCard({ session, onDelete, onRefresh, isAdmin = fa
     try {
       // Restart the session
       await sessionsAPI.restart(session.session_id);
-      // Update local status to show it's restarting
-      setStatus('initializing');
+      // Update local status to show it's reconnecting
+      setStatus('reconnecting');
       // Refresh the session list after a short delay
       setTimeout(() => {
         onRefresh?.();
@@ -132,6 +134,21 @@ export default function SessionCard({ session, onDelete, onRefresh, isAdmin = fa
           </div>
         </div>
 
+        {/* Session Data Status Warning */}
+        {!session.session_data_exists && session.session_data_reason && (
+          <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-orange-800">Session Data Issue</p>
+              <p className="text-xs text-orange-700 mt-1">
+                {session.session_data_reason === 'directory_not_found' && 'Auth directory not found. QR scan required.'}
+                {session.session_data_reason === 'no_auth_files' && 'Auth files missing. QR scan required.'}
+                {session.session_data_reason === 'error' && 'Cannot verify auth data. May need QR scan.'}
+              </p>
+            </div>
+          </div>
+        )}
+
         {isAdmin && (
           <div className="mb-4">
             <label className="block text-xs font-medium text-gray-500 mb-2">
@@ -166,6 +183,14 @@ export default function SessionCard({ session, onDelete, onRefresh, isAdmin = fa
             >
               <QrCode className="w-4 h-4" />
               Show QR
+            </button>
+          ) : status === 'reconnecting' ? (
+            <button
+              disabled
+              className="btn btn-secondary flex-1 flex items-center justify-center gap-2 opacity-75 cursor-not-allowed"
+            >
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Reconnecting...
             </button>
           ) : (
             <button
