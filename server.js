@@ -726,9 +726,33 @@ app.post('/api/sessions/:sessionId/restart', authenticate, async (req, res) => {
         }
         
         const client = clients.get(sessionId);
+        const currentStatus = sessionStatuses.get(sessionId);
+
+        // Guard: Prevent restart if session is recently authenticated (within last 10 seconds)
+        // This prevents destroying client immediately after authentication
+        if (client && currentStatus === 'authenticated') {
+            const [dbSessions] = await pool.execute(
+                'SELECT updated_at FROM sessions WHERE session_id = ?',
+                [sessionId]
+            );
+            
+            if (dbSessions.length > 0 && dbSessions[0].updated_at) {
+                const lastUpdate = new Date(dbSessions[0].updated_at);
+                const secondsSinceUpdate = (Date.now() - lastUpdate.getTime()) / 1000;
+                
+                if (secondsSinceUpdate < 10) {
+                    console.log(`⚠️  [RESTART SESSION] Session ${sessionId} was authenticated ${secondsSinceUpdate.toFixed(1)} seconds ago. Waiting for ready state...`);
+                    return res.status(409).json({ 
+                        error: 'Session was recently authenticated. Please wait for it to become ready (max 60 seconds) before restarting.',
+                        secondsSinceAuth: Math.round(secondsSinceUpdate),
+                        suggestion: 'If session does not become ready within 60 seconds, then restart.'
+                    });
+                }
+            }
+        }
 
         if (client) {
-            console.log(`🔄 [RESTART SESSION] Destroying existing client for: ${sessionId}`);
+            console.log(`🔄 [RESTART SESSION] Destroying existing client for: ${sessionId} (current status: ${currentStatus || 'unknown'})`);
             try {
                 await client.destroy();
             } catch (err) {
