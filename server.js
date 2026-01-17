@@ -1238,6 +1238,22 @@ app.post('/api/messages/send', authenticate, (req, res, next) => {
             return res.status(404).json({ error: 'Session not found' });
         }
 
+        // Check if client is ready (has client.info)
+        if (!client.info) {
+            const sessionStatus = sessionStatuses.get(sessionId);
+            console.error(`❌ [SEND MESSAGE] Client not ready for session ${sessionId}:`, {
+                hasClient: !!client,
+                hasInfo: !!client.info,
+                status: sessionStatus || 'unknown'
+            });
+            return res.status(503).json({ 
+                error: 'Session not ready. Please wait for the session to be fully connected.',
+                status: sessionStatus || 'unknown',
+                hasClient: !!client,
+                hasInfo: false
+            });
+        }
+
         const chatId = phone.includes('@') ? phone : `${phone}@c.us`;
         let sentMessage;
 
