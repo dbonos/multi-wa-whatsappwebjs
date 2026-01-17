@@ -142,6 +142,7 @@ export default function SessionCard({ session, onDelete, onRefresh, isAdmin = fa
               <p className="text-xs font-medium text-orange-800">Session Data Issue</p>
               <p className="text-xs text-orange-700 mt-1">
                 {session.session_data_reason === 'directory_not_found' && 'Auth directory not found. QR scan required.'}
+                {session.session_data_reason === 'no_default_directory' && 'Auth structure incomplete. QR scan required.'}
                 {session.session_data_reason === 'no_auth_files' && 'Auth files missing. QR scan required.'}
                 {session.session_data_reason === 'error' && 'Cannot verify auth data. May need QR scan.'}
               </p>

@@ -3148,15 +3148,22 @@ async function checkSessionDataExists(sessionId) {
             return { exists: false, reason: 'directory_not_found' };
         }
         
-        // Check if session data file exists (Default/Session Storage or similar)
-        const files = await fs.readdir(sessionPath);
-        const hasSessionData = files.some(file => 
-            file.includes('Session Storage') || 
-            file.includes('Local Storage') || 
-            file.includes('session-')
-        );
+        // Check if Default directory exists (WhatsApp Web.js auth structure)
+        const defaultPath = path.join(sessionPath, 'Default');
+        if (!fsSync.existsSync(defaultPath)) {
+            return { exists: false, reason: 'no_default_directory' };
+        }
         
-        if (!hasSessionData) {
+        // Check if critical auth files exist in Default directory
+        const criticalPaths = [
+            path.join(defaultPath, 'Local Storage'),
+            path.join(defaultPath, 'Session Storage'),
+            path.join(defaultPath, 'Sessions')
+        ];
+        
+        const hasAuthFiles = criticalPaths.some(p => fsSync.existsSync(p));
+        
+        if (!hasAuthFiles) {
             return { exists: false, reason: 'no_auth_files' };
         }
         
