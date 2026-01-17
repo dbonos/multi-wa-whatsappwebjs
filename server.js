@@ -866,6 +866,64 @@ app.get('/api/sessions/:sessionId/status', authenticate, async (req, res) => {
     }
 });
 
+// Get session diagnostic information (detailed client state)
+app.get('/api/sessions/:sessionId/diagnostic', authenticate, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const client = clients.get(sessionId);
+
+        if (!client) {
+            return res.status(404).json({ error: 'Session not found in memory' });
+        }
+
+        const status = sessionStatuses.get(sessionId) || 'unknown';
+
+        // Check event listener counts
+        const eventNames = ['qr', 'authenticated', 'auth_failure', 'ready', 'message', 'message_create', 'message_ack', 'message_reaction', 'message_revoke_everyone', 'message_revoke_me', 'disconnected', 'loading_screen'];
+        const eventListeners = {};
+        eventNames.forEach(eventName => {
+            const listeners = client.listenerCount(eventName);
+            eventListeners[eventName] = listeners;
+        });
+
+        // Get DB status
+        const [dbSessions] = await pool.execute(
+            'SELECT status, phone_number, display_name, connected_at, last_activity, updated_at FROM sessions WHERE session_id = ?',
+            [sessionId]
+        );
+
+        const dbStatus = dbSessions.length > 0 ? dbSessions[0] : null;
+
+        // Check client state
+        const clientState = {
+            hasClient: !!client,
+            hasInfo: !!client.info,
+            infoDetails: client.info ? {
+                hasWid: !!client.info.wid,
+                widUser: client.info.wid?.user || null,
+                pushname: client.info.pushname || null,
+                platform: client.info.platform || null
+            } : null,
+            pupSession: client.pupPage ? 'exists' : 'null',
+            pupBrowser: client.pupBrowser ? 'exists' : 'null'
+        };
+
+        res.json({
+            success: true,
+            sessionId,
+            memoryStatus: status,
+            dbStatus,
+            clientState,
+            eventListeners,
+            totalEventListeners: Object.values(eventListeners).reduce((sum, count) => sum + count, 0),
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error(`❌ [DIAGNOSTIC] Error getting diagnostic info for ${req.params.sessionId}:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ============================================
 // MENU PERMISSIONS ENDPOINTS (Admin only)
 // ============================================
