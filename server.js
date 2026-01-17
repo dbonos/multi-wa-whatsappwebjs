@@ -45,6 +45,7 @@ const SKIP_GROUPS_CACHE_TTL = 30000; // Cache for 30 seconds
 const skipGroupsPendingRequests = new Map(); // sessionId -> Promise (request deduplication)
 const qrRegenerationCount = new Map(); // sessionId -> count (track QR regenerations)
 const MAX_QR_REGENERATIONS = 5; // Maximum QR code regenerations before auto-destroy
+const eventListenerAttached = new Map(); // sessionId -> timestamp (track when event listeners were attached)
 
 // Initialize scheduler service
 const schedulerService = new SchedulerService(clients);
@@ -3247,7 +3248,7 @@ function createClient(sessionId) {
 
     // Authenticated event
     client.on('authenticated', async () => {
-        console.log(`[${sessionId}] Authenticated`);
+        console.log(`🔐 [AUTHENTICATED] Session ${sessionId} authenticated successfully`);
         sessionStatuses.set(sessionId, 'authenticated');
         
         // Reset QR regeneration counter on successful authentication
@@ -3306,30 +3307,20 @@ function createClient(sessionId) {
                 
                 socketHandler.emitSessionStatus(sessionId, 'ready', { info: currentClient.info });
             } else if (checkCount >= maxChecks) {
-                // After 60 seconds, if still no info, mark as ready anyway if we have phone_number from DB
+                // After 60 seconds, if still no info, DO NOT mark as ready
+                // Session needs to be manually restarted or will retry on next server restart
                 console.log(`⚠️  [AUTHENTICATED FALLBACK] Session ${sessionId} still authenticated after 60 seconds, but client.info not available`);
+                console.log(`⚠️  [AUTHENTICATED FALLBACK] Session ${sessionId} will NOT be marked as ready without client.info - manual restart required`);
                 
-                // Try to get phone_number from database
-                const [dbSessions] = await pool.execute(
-                    'SELECT phone_number, display_name FROM sessions WHERE session_id = ?',
+                // Mark as stuck_authenticated instead of ready
+                sessionStatuses.set(sessionId, 'authenticated');
+                await pool.execute(
+                    `UPDATE sessions 
+                     SET status = 'authenticated', 
+                         last_activity = CURRENT_TIMESTAMP
+                     WHERE session_id = ?`,
                     [sessionId]
                 );
-                
-                if (dbSessions.length > 0 && dbSessions[0].phone_number) {
-                    console.log(`✅ [AUTHENTICATED FALLBACK] Marking session ${sessionId} as ready based on DB data (phone: ${dbSessions[0].phone_number})`);
-                    sessionStatuses.set(sessionId, 'ready');
-                    qrCodes.delete(sessionId);
-                    
-                    await pool.execute(
-                        `UPDATE sessions 
-                         SET status = 'ready', 
-                             last_activity = CURRENT_TIMESTAMP
-                         WHERE session_id = ?`,
-                        [sessionId]
-                    );
-                    
-                    socketHandler.emitSessionStatus(sessionId, 'ready');
-                }
                 
                 clearInterval(checkInterval);
             }
@@ -3562,7 +3553,7 @@ function createClient(sessionId) {
 
     // Auth failure
     client.on('auth_failure', async (msg) => {
-        console.error(`[${sessionId}] Authentication failure:`, msg);
+        console.error(`❌ [AUTH FAILURE] Session ${sessionId} authentication failed:`, msg);
         sessionStatuses.set(sessionId, 'auth_failure');
 
         await pool.execute(
@@ -3615,6 +3606,11 @@ function createClient(sessionId) {
         }, 60000); // Wait 60 seconds before cleanup (increased from 30s)
     });
 
+    // Track that event listeners have been attached
+    eventListenerAttached.set(sessionId, new Date());
+    console.log(`✅ [CREATE CLIENT] Event listeners attached for session ${sessionId} at ${new Date().toISOString()}`);
+    console.log(`📊 [CREATE CLIENT] Total event listeners attached: ${client.listenerCount('message') + client.listenerCount('message_create')}`);
+
     return client;
 }
 
@@ -3656,21 +3652,8 @@ async function initializeExistingSessions() {
         for (const session of sessions) {
             const { session_id, status, seconds_since_update } = session;
             
-            // If session has been authenticated for more than 30 seconds, mark it as ready in DB
-            // This handles cases where ready event never fired but session is actually ready
-            if (status === 'authenticated' && seconds_since_update > 30) {
-                console.log(`⚠️  [AUTO-INIT] Session ${session_id} has been authenticated for ${seconds_since_update} seconds, marking as ready`);
-                await pool.execute(
-                    `UPDATE sessions 
-                     SET status = 'ready', 
-                         last_activity = CURRENT_TIMESTAMP
-                     WHERE session_id = ?`,
-                    [session_id]
-                );
-                // Skip reinitialize - session will be handled by next AUTO-INIT cycle with ready status
-                console.log(`⏭️  [AUTO-INIT] Skipping reinitialize for ${session_id} - marked as ready, will initialize in next cycle`);
-                continue;
-            }
+            // REMOVED: Do NOT auto-mark authenticated sessions as ready without verifying client.info
+            // Session must reach ready state through proper ready event with client.info verification
             
             // Check if client already exists
             if (clients.has(session_id)) {
