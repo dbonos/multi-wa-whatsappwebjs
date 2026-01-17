@@ -136,9 +136,10 @@ class MessageHandler {
                 // Check if group is in skip list
                 // Need to check multiple formats because group_id might be stored differently
                 // Also check contact_id field in skip_messages (some entries might use contact_id instead of group_id)
+                // Check both session-specific skip list AND global skip list (session_id IS NULL)
                 const [skipGroups] = await pool.execute(
                     `SELECT id, group_id, contact_id FROM skip_messages 
-                    WHERE session_id = ? 
+                    WHERE (session_id = ? OR session_id IS NULL)
                     AND type = 'group' 
                     AND is_active = TRUE
                     AND (
@@ -193,10 +194,11 @@ class MessageHandler {
                         });
                         
                         // Check skip_messages with both contact_id and lid_original
+                        // Check both session-specific skip list AND global skip list (session_id IS NULL)
                         if (checkContactId || checkLidOriginal) {
                             const [skipByContact] = await pool.execute(
                                 `SELECT id FROM skip_messages 
-                                WHERE session_id = ? 
+                                WHERE (session_id = ? OR session_id IS NULL)
                                 AND type = 'group' 
                                 AND is_active = TRUE
                                 AND (
@@ -225,9 +227,10 @@ class MessageHandler {
                 }
             } else {
                 // Check if contact/phone is in skip list
+                // Check both session-specific skip list AND global skip list (session_id IS NULL)
                 const [skipContacts] = await pool.execute(
                     `SELECT id FROM skip_messages 
-                    WHERE session_id = ? 
+                    WHERE (session_id = ? OR session_id IS NULL)
                     AND type = 'contact' 
                     AND is_active = TRUE
                     AND (
